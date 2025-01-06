@@ -16,55 +16,109 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
-        lib = pkgs.lib;
-        stdenv = pkgs.stdenv;
+        pkgs = nixpkgs.legacyPackages.${system}.pkgsLLVM;
+        # (
+        #     final: prev: {
+        #       stdenv = nixpkgs.legacyPackages.${system}.pkgsLLVM;
+        #       # stdenv = { };
+        #     }
+        #   );
+        # pkgs = import nixpkgs {
+        #   inherit system;
+        #   overlays = [
+        #     (final: prev: {
+        #       stdenv = prev.clangStdenv;
+        #       # stdenv = { };
+        #     })
+        #   ];
+        # };
+        # sysPkgs = nixpkgs.legacyPackages.${system};
+        # pkgs = sysPkgs // {
+        #   overlays = [
+        #     (final: prev: {
+        #       stdenv = prev.clangStdenv;
+        #       # stdenv = { };
+        #     })
+        #   ];
+        # };
+        # pkgs = sysPkgs // {
+        #   stdenv = sysPkgs.llvmPackages.libcxxStdenv;
+        # };
+        inherit (pkgs) lib;
         craneLib = crane.mkLib pkgs;
 
-        env = {
+        commonEnv = {
           CARGO_BUILD_RUSTFLAGS = "-C target-cpu=native -C prefer-dynamic=no";
-          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-          BINDGEN_EXTRA_CLANG_ARGS = lib.concatStringsSep " " [
-            (builtins.readFile "${stdenv.cc}/nix-support/libc-crt1-cflags")
-            (builtins.readFile "${stdenv.cc}/nix-support/libc-cflags")
-            (builtins.readFile "${stdenv.cc}/nix-support/cc-cflags")
-            (builtins.readFile "${stdenv.cc}/nix-support/libcxx-cxxflags")
-            (lib.optionalString stdenv.cc.isClang "-idirafter ${stdenv.cc.cc}/lib/clang/${lib.getVersion stdenv.cc.cc}/include")
-            (lib.optionalString stdenv.cc.isGNU "-isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc} -isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}/${stdenv.hostPlatform.config} -idirafter ${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.config}/${lib.getVersion stdenv.cc.cc}/include")
-          ];
+        };
+        env = commonEnv // {
+          # LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+          BINDGEN_EXTRA_CLANG_ARGS = "-std=c++20";
+          # BINDGEN_EXTRA_CLANG_ARGS = lib.concatStringsSep " " [
+          #   "-std=c++20"
+          #   (builtins.readFile "${stdenv.cc}/nix-support/cc-cflags")
+          #   (builtins.readFile "${stdenv.cc}/nix-support/libc-cflags")
+          #   (builtins.readFile "${stdenv.cc}/nix-support/libc-crt1-cflags")
+          #   (builtins.readFile "${stdenv.cc}/nix-support/libcxx-cxxflags")
+          #   (builtins.readFile "${stdenv.cc}/nix-support/libcxx-ldflags")
+          #
+          #   # (builtins.readFile "${stdenv.cc}/nix-support/cc-ldflags")
+          #   # (builtins.readFile "${stdenv.cc}/nix-support/cc-cflags-before")
+          #
+          #   (lib.optionalString stdenv.cc.isClang "-idirafter ${stdenv.cc.cc}/lib/clang/${lib.getVersion stdenv.cc.cc}/include")
+          #   (lib.optionalString stdenv.cc.isGNU "-isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc} -isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}/${stdenv.hostPlatform.config} -idirafter ${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.config}/${lib.getVersion stdenv.cc.cc}/include")
+          # ];
+          # RAGENIX_CLIB_PREFIX = "${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.config}";
         };
 
-        commonArgs = {
-          src = craneLib.cleanCargoSource ./.;
+        sourceFilter =
+          path: type: (lib.hasSuffix "/include.hpp" path) || (craneLib.filterCargoSources path type);
+
+        commonArgs = commonEnv // {
+          src = lib.cleanSourceWith {
+            src = ./.;
+            filter = sourceFilter;
+            name = "source";
+          };
           strictDeps = true;
 
-          nativeBuildInputs = with pkgs; [
-            pkg-config
-            llvmPackages.libclang.lib
-          ];
+          nativeBuildInputs = [ ];
           buildInputs = with pkgs; [ ] ++ lib.optionals stdenv.isDarwin [ libiconv ];
-        } // env;
+        };
+        args =
+          commonArgs
+          // env
+          // {
+            nativeBuildInputs =
+              with pkgs;
+              commonArgs.nativeBuildInputs
+              ++ [
+                pkg-config
+                # llvmPackages.libclang.lib
+                # llvmPackages.clang
+              ];
+            buildInputs =
+              with pkgs;
+              commonArgs.buildInputs
+              ++ [
+                nix
+                boost
+              ];
+          };
 
-        cargoArtifacts = craneLib.buildDepsOnly (
-          {
-            preBuild = "cpp -v /dev/null -o /dev/null";
-          }
-          // commonArgs
-        );
-
-        ragenix = craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; });
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        ragenix = craneLib.buildPackage (args // { inherit cargoArtifacts; });
 
         hack =
           {
-            args,
+            extraArgs,
             tools ? [ ],
           }:
           craneLib.mkCargoDerivation (
-            commonArgs
+            args
             // {
               inherit cargoArtifacts;
               pnameSuffix = "-hack";
-              buildPhaseCargoCommand = "cargo hack --feature-powerset --workspace ${args}";
+              buildPhaseCargoCommand = "cargo hack --feature-powerset --workspace ${extraArgs}";
               nativeBuildInputs = (commonArgs.nativeBuildInputs or [ ]) ++ [ pkgs.cargo-hack ] ++ tools;
             }
           );
@@ -74,28 +128,28 @@
           inherit ragenix;
 
           hackCheck = hack {
-            args = "check";
+            extraArgs = "check";
           };
           hackCheckTests = hack {
-            args = "check --tests";
+            extraArgs = "check --tests";
           };
           hackCheckExamples = hack {
-            args = "check --examples";
+            extraArgs = "check --examples";
           };
           hackClippy = hack {
-            args = "clippy";
+            extraArgs = "clippy";
             tools = [ pkgs.clippy ];
           };
           hackClippyTests = hack {
-            args = "clippy --tests";
+            extraArgs = "clippy --tests";
             tools = [ pkgs.clippy ];
           };
           hackClippyExamples = hack {
-            args = "clippy --examples";
+            extraArgs = "clippy --examples";
             tools = [ pkgs.clippy ];
           };
           hackTest = hack {
-            args = "test";
+            extraArgs = "test";
           };
         };
 
@@ -110,7 +164,7 @@
           checks = self.checks.${system};
           packages = with pkgs; [
             cargo-hack
-            libclang
+            # libclang
           ];
         };
 

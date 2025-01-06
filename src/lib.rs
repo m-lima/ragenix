@@ -1,7 +1,7 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[no_mangle]
-extern "C" fn yo(input: u8) -> u8 {
+pub extern "C" fn yo(input: u8) -> u8 {
     input.wrapping_add(1)
 }
 
