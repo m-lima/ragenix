@@ -81,7 +81,7 @@
 
         main = {
           env = deps.env // {
-            LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+            # LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
             # BINDGEN_EXTRA_CLANG_ARGS = "-std=c++20";
             # BINDGEN_EXTRA_CLANG_ARGS = lib.concatStringsSep " " [
             #   "-std=c++20"
@@ -99,6 +99,7 @@
             #   (lib.optionalString stdenv.cc.isGNU "-isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc} -isystem ${stdenv.cc.cc}/include/c++/${lib.getVersion stdenv.cc.cc}/${stdenv.hostPlatform.config} -idirafter ${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.config}/${lib.getVersion stdenv.cc.cc}/include -idirafter ${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.config}/14.2.1/include")
             # ];
             # RAGENIX_CLIB_PREFIX = "${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.config}";
+            NIX_OUTPATH_USED_AS_RANDOM_SEED = "ragenixout";
           };
 
           args =
@@ -111,8 +112,8 @@
                 deps.args.nativeBuildInputs
                 ++ [
                   pkg-config
-                  # llvmPackages.libclang.lib
                   # llvmPackages.clang
+                  rustPlatform.bindgenHook
                 ];
               buildInputs =
                 with pkgs;

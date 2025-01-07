@@ -37,6 +37,7 @@ fn main() {
     let nix_main = find_pkg!("nix-main");
 
     let bindings = bindgen::Builder::default()
+        .clang_arg("-std=c++20")
         .add_pkg_config(nix_expr)
         .add_pkg_config(nix_store)
         .add_pkg_config(nix_main)
