@@ -22,16 +22,25 @@ impl Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let slice = unsafe { std::slice::from_raw_parts(self.message, self.len) };
-        match std::str::from_utf8(slice) {
-            Ok(string) => f.write_str(string),
-            Err(_) => f.write_str(&String::from_utf8_lossy(slice)),
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let slice = unsafe { core::slice::from_raw_parts(self.message, self.len) };
+        if let Ok(string) = core::str::from_utf8(slice) {
+            f.write_str(string)
+        } else {
+            for chunk in slice.utf8_chunks() {
+                for ch in chunk.valid().chars() {
+                    write!(f, "{ch}")?;
+                }
+                for byte in chunk.invalid() {
+                    write!(f, "\\x{byte:02X}")?;
+                }
+            }
+            Ok(())
         }
     }
 }
 
-pub type Result<T = ()> = std::result::Result<T, Error>;
+pub type Result<T = ()> = core::result::Result<T, Error>;

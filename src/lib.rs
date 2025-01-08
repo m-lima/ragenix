@@ -4,6 +4,12 @@ mod nix;
 use error::Result;
 use nix::Context;
 
+macro_rules! c_array {
+    ($($value: literal),*) => {
+        [$($value.as_ptr()),*, core::ptr::null()]
+    }
+}
+
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 extern "C" fn increment(
     _: *mut ::core::ffi::c_void,
@@ -33,7 +39,7 @@ extern "C" fn increment(
 
 #[no_mangle]
 pub extern "C" fn nix_plugin_entry() {
-    static mut ARGS: &mut [*const core::ffi::c_char] = &mut [c"number".as_ptr(), core::ptr::null()];
+    static mut ARGS: &mut [*const core::ffi::c_char; 2] = &mut c_array![c"number"];
 
     let context = Context::new();
     if let Err(error) = context.create_primop(
