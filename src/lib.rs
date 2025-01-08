@@ -1,9 +1,8 @@
-mod context;
 mod error;
 mod nix;
 
-use context::Context;
 use error::Result;
+use nix::Context;
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 extern "C" fn increment(

@@ -1,5 +1,7 @@
-use crate::error::{Error, Result};
-use crate::nix;
+use crate::{
+    error::{Error, Result},
+    nix,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Context(*mut nix::nix_c_context);

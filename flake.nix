@@ -56,7 +56,6 @@
                 deps.args.nativeBuildInputs
                 ++ [
                   pkg-config
-                  # llvmPackages.clang
                   rustPlatform.bindgenHook
                 ];
               buildInputs =
