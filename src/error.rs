@@ -26,7 +26,7 @@ impl core::error::Error for Error {}
 
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let slice = unsafe { core::slice::from_raw_parts(self.message, self.len) };
+        let slice = unsafe { core::slice::from_raw_parts(self.message.cast::<u8>(), self.len) };
         if let Ok(string) = core::str::from_utf8(slice) {
             f.write_str(string)
         } else {
