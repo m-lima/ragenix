@@ -12,9 +12,8 @@ impl Error {
         Self { code, message, len }
     }
 
-    pub fn custom(message: &'static str) -> Self {
-        let message = message.as_bytes();
-        let len = message.len();
+    pub fn custom(message: &'static core::ffi::CStr) -> Self {
+        let len = message.count_bytes();
         Self::new(nix::nix_err_NIX_ERR_UNKNOWN, message.as_ptr(), len)
     }
 

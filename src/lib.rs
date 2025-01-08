@@ -34,18 +34,15 @@ extern "C" fn increment(
 
 #[no_mangle]
 pub extern "C" fn nix_plugin_entry() {
-    fn plugin_entry(context: &Context) -> Result {
-        static mut ARGS: [&core::ffi::CStr; 1] = [c"number"];
-        context.create_primop(
-            increment,
-            c"increment",
-            &raw mut ARGS,
-            c"Increment the value",
-        )
-    }
+    static mut ARGS: &mut [*const core::ffi::c_char] = &mut [c"number".as_ptr(), core::ptr::null()];
 
     let context = Context::new();
-    if let Err(error) = plugin_entry(&context) {
+    if let Err(error) = context.create_primop(
+        increment,
+        c"increment",
+        unsafe { ARGS },
+        c"Increment the value",
+    ) {
         error.report(context.as_ptr());
     }
 }

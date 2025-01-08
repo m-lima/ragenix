@@ -17,7 +17,7 @@ impl Context {
         &self,
         func: nix::PrimOpFunc,
         name: &'static core::ffi::CStr,
-        args: *mut [&'static core::ffi::CStr],
+        args: &mut [*const core::ffi::c_char],
         doc: &'static core::ffi::CStr,
     ) -> Result {
         let primop = PrimOp::new(self, func, name, args, doc)?;
@@ -29,24 +29,30 @@ impl Context {
         if value_type == nix::ValueType_NIX_TYPE_INT {
             self.check(unsafe { nix::nix_get_int(self.0, value) })
         } else {
-            Err(Error::custom("Value is not an integer"))
+            Err(Error::custom(c"Value is not an integer"))
         }
     }
 
     pub fn set_int(&self, out_value: *mut nix::nix_value, int: i64) -> Result {
-        self.check(unsafe { nix::nix_init_int(self.0, out_value, int) })
-            .map(|_| ())
+        self.check_with_code(unsafe { nix::nix_init_int(self.0, out_value, int) })
     }
 }
 
 impl Context {
     pub fn force_eval(&self, state: *mut nix::EvalState, value: *mut nix::nix_value) -> Result {
-        self.check(unsafe { nix::nix_value_force(self.0, state, value) })?;
-        Ok(())
+        self.check_with_code(unsafe { nix::nix_value_force(self.0, state, value) })
     }
 
     fn check<T>(&self, value: T) -> Result<T> {
         let code = unsafe { nix::nix_err_code(self.0) };
+        self.check_internal(value, code)
+    }
+
+    fn check_with_code(&self, code: nix::nix_err) -> Result {
+        self.check_internal((), code)
+    }
+
+    fn check_internal<T>(&self, value: T, code: nix::nix_err) -> Result<T> {
         if code == nix::nix_err_NIX_OK {
             Ok(value)
         } else {
@@ -78,25 +84,25 @@ impl<'a> PrimOp<'a> {
         context: &'a Context,
         func: nix::PrimOpFunc,
         name: &'static core::ffi::CStr,
-        args: *mut [&'static core::ffi::CStr],
+        args: &mut [*const core::ffi::c_char],
         doc: &'static core::ffi::CStr,
     ) -> Result<Self> {
-        let len = core::ffi::c_int::try_from(args.len())
-            .map_err(|_| Error::custom("Could not fit argument count within usize"))?;
-        let args = args.cast::<*const u8>();
+        let len = core::ffi::c_int::try_from(args.len().min(1) - 1)
+            .map_err(|_| Error::custom(c"Could not fit argument count within usize"))?;
 
-        let primop = context.check(unsafe {
-            nix::nix_alloc_primop(
-                context.as_ptr(),
-                Some(func),
-                len,
-                name.as_ptr(),
-                args,
-                doc.as_ptr(),
-                core::ptr::null_mut(),
-            )
-        })?;
-        Ok(Self { primop, context })
+        context
+            .check(unsafe {
+                nix::nix_alloc_primop(
+                    context.as_ptr(),
+                    Some(func),
+                    len,
+                    name.as_ptr(),
+                    args.as_mut_ptr().cast(),
+                    doc.as_ptr(),
+                    core::ptr::null_mut(),
+                )
+            })
+            .map(|primop| Self { primop, context })
     }
 
     fn register(self) -> Result {
