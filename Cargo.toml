@@ -8,9 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 age = { version = "0.11.1", features = ["armor", "plugin", "ssh"] }
-anyhow = "1.0.95"
 
 [build-dependencies]
 bindgen = "0.71.1"
-cc = "1.2.7"
 pkg-config = "0.3.31"

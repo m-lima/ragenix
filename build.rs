@@ -32,16 +32,18 @@ fn main() {
         };
     }
 
-    let nix_expr = find_pkg!("nix-expr");
-    let nix_store = find_pkg!("nix-store");
-    let nix_main = find_pkg!("nix-main");
+    let nix_expr = find_pkg!("nix-expr-c");
+    println!("{:?}", nix_expr.lib);
+    // let nix_store = find_pkg!("nix-store");
+    // let nix_main = find_pkg!("nix-main");
 
     let bindings = bindgen::Builder::default()
-        .clang_arg("-std=c++20")
+        // .clang_arg("-std=c++20")
         .add_pkg_config(nix_expr)
-        .add_pkg_config(nix_store)
-        .add_pkg_config(nix_main)
-        .header("include.hpp")
+        .use_core()
+        // .add_pkg_config(nix_store)
+        // .add_pkg_config(nix_main)
+        .header("include.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
