@@ -43,15 +43,15 @@ impl Log {
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 extern "C" fn increment(
     _: *mut ::core::ffi::c_void,
-    context: *mut nix::nix_c_context,
-    state: *mut nix::EvalState,
-    args: *mut *mut nix::nix_value,
-    out_value: *mut nix::nix_value,
+    context: *mut nix::RawContext,
+    state: *mut nix::State,
+    args: *mut *mut nix::Value,
+    out_value: *mut nix::Value,
 ) {
     fn increment(
-        state: *mut nix::EvalState,
-        args: *mut *mut nix::nix_value,
-        out_value: *mut nix::nix_value,
+        state: *mut nix::State,
+        args: *mut *mut nix::Value,
+        out_value: *mut nix::Value,
     ) -> Result {
         let arg = unsafe { *args };
         let context = Context::new();

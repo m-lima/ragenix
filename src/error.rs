@@ -2,23 +2,23 @@ use crate::nix;
 
 #[derive(Debug)]
 pub struct Error {
-    code: nix::nix_err,
+    code: nix::Error,
     message: *const core::ffi::c_char,
     len: usize,
 }
 
 impl Error {
-    pub fn new(code: nix::nix_err, message: *const core::ffi::c_char, len: usize) -> Self {
+    pub fn new(code: nix::Error, message: *const core::ffi::c_char, len: usize) -> Self {
         Self { code, message, len }
     }
 
     pub fn custom(message: &'static core::ffi::CStr) -> Self {
         let len = message.count_bytes();
-        Self::new(nix::nix_err_NIX_ERR_UNKNOWN, message.as_ptr(), len)
+        Self::new(nix::ERR_UNKNOWN, message.as_ptr(), len)
     }
 
-    pub fn report(&self, context: *mut nix::nix_c_context) {
-        unsafe { nix::nix_set_err_msg(context, self.code, self.message) };
+    pub fn report(&self, reporter: impl Reporter) {
+        reporter.report(self.code, self.message);
     }
 }
 
@@ -44,3 +44,7 @@ impl core::fmt::Display for Error {
 }
 
 pub type Result<T = ()> = core::result::Result<T, Error>;
+
+pub trait Reporter {
+    fn report(self, code: nix::Error, message: *const core::ffi::c_char);
+}
