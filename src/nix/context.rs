@@ -26,6 +26,14 @@ impl Context {
         primop.register()
     }
 
+    pub fn eval(&self, state: *mut nix::EvalState, value: *mut nix::nix_value) -> Result {
+        self.check_with_code(unsafe { nix::nix_value_force(self.0, state, value) })
+    }
+
+    pub fn alloc(&self, state: *mut nix::EvalState) -> Result<*mut nix::nix_value> {
+        self.check(unsafe { nix::nix_alloc_value(self.0, state) })
+    }
+
     pub fn get_int(&self, value: *const nix::nix_value) -> Result<i64> {
         let value_type = self.get_type(value)?;
         if value_type == nix::ValueType_NIX_TYPE_INT {
@@ -38,13 +46,27 @@ impl Context {
     pub fn set_int(&self, out_value: *mut nix::nix_value, int: i64) -> Result {
         self.check_with_code(unsafe { nix::nix_init_int(self.0, out_value, int) })
     }
+
+    pub fn get_path(&self, value: *const nix::nix_value) -> Result<*const core::ffi::c_char> {
+        let value_type = self.get_type(value)?;
+        if value_type == nix::ValueType_NIX_TYPE_PATH {
+            self.check(unsafe { nix::nix_get_path_string(self.0, value) })
+        } else {
+            Err(Error::custom(c"Value is not a path"))
+        }
+    }
+
+    pub fn set_path(
+        &self,
+        state: *mut nix::EvalState,
+        out_value: *mut nix::nix_value,
+        path: *const core::ffi::c_char,
+    ) -> Result {
+        self.check_with_code(unsafe { nix::nix_init_path_string(self.0, state, out_value, path) })
+    }
 }
 
 impl Context {
-    pub fn force_eval(&self, state: *mut nix::EvalState, value: *mut nix::nix_value) -> Result {
-        self.check_with_code(unsafe { nix::nix_value_force(self.0, state, value) })
-    }
-
     fn check<T>(&self, value: T) -> Result<T> {
         let code = unsafe { nix::nix_err_code(self.0) };
         self.check_internal(value, code)
