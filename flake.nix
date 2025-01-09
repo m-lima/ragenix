@@ -104,15 +104,15 @@
             extraArgs = "check --examples";
           };
           hackClippy = hack {
-            extraArgs = "clippy";
+            extraArgs = "clippy -- -D warnings -W clippy::pedantic";
             tools = [ pkgs.clippy ];
           };
           hackClippyTests = hack {
-            extraArgs = "clippy --tests";
+            extraArgs = "clippy --tests -- -D warnings -W clippy::pedantic";
             tools = [ pkgs.clippy ];
           };
           hackClippyExamples = hack {
-            extraArgs = "clippy --examples";
+            extraArgs = "clippy --examples -- -D warnings -W clippy::pedantic";
             tools = [ pkgs.clippy ];
           };
           hackTest = hack {
