@@ -45,23 +45,27 @@ extern "C" fn increment(
     _: *mut ::core::ffi::c_void,
     context: *mut nix::RawContext,
     state: *mut nix::State,
-    args: *mut *mut nix::Value,
-    out_value: *mut nix::Value,
+    args: *mut *mut nix::RawValue,
+    out_value: *mut nix::RawValue,
 ) {
     fn increment(
         state: *mut nix::State,
-        args: *mut *mut nix::Value,
-        out_value: *mut nix::Value,
+        args: *mut *mut nix::RawValue,
+        out_value: *mut nix::RawValue,
     ) -> Result {
-        let arg = unsafe { *args };
         let context = Context::new();
-        context.eval(state, arg)?;
-        let value = context.get_path(arg)?;
-        LOG.write(|f| {
-            let value = unsafe { core::ffi::CStr::from_ptr(value) };
-            writeln!(f, "{value:?}")
-        })?;
-        context.set_int(out_value, 3)?;
+        let arg = nix::Value::own(&context, unsafe { *args })?;
+
+        arg.eval(state)?;
+
+        let path = arg.get_path()?;
+        let path_str = unsafe { core::ffi::CStr::from_ptr(path) };
+        let path_copy = Vec::from(path_str.to_bytes_with_nul());
+        // let new_value = context.create_value(state)?;
+
+        LOG.write(|f| writeln!(f, "{path_str:?} :: {path_copy:?}"))?;
+        let out_value = nix::Value::own(&context, out_value)?;
+        out_value.set_path(state, path_copy.as_ptr())?;
 
         Ok(())
     }
@@ -82,6 +86,6 @@ pub extern "C" fn nix_plugin_entry() {
         unsafe { ARGS },
         c"Increment the value",
     ) {
-        error.report(context.as_ptr());
+        error.report(context);
     }
 }

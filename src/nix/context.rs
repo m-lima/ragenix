@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::{
     error::{Error, Result},
     nix::{self, inner},
@@ -11,10 +13,6 @@ impl Context {
         Self(unsafe { inner::nix_c_context_create() })
     }
 
-    pub fn as_ptr(&self) -> *mut nix::RawContext {
-        self.0
-    }
-
     pub fn create_primop(
         &self,
         func: nix::PrimOpFunc,
@@ -26,53 +24,18 @@ impl Context {
         primop.register()
     }
 
-    pub fn eval(&self, state: *mut nix::State, value: *mut nix::Value) -> Result {
-        self.check_with_code(unsafe { inner::nix_value_force(self.0, state, value) })
-    }
-
-    pub fn alloc(&self, state: *mut nix::State) -> Result<*mut nix::Value> {
-        self.check(unsafe { inner::nix_alloc_value(self.0, state) })
-    }
-
-    pub fn get_int(&self, value: *const nix::Value) -> Result<i64> {
-        let value_type = self.get_type(value)?;
-        if value_type == inner::ValueType_NIX_TYPE_INT {
-            self.check(unsafe { inner::nix_get_int(self.0, value) })
-        } else {
-            Err(Error::custom(c"Value is not an integer"))
-        }
-    }
-
-    pub fn set_int(&self, out_value: *mut nix::Value, int: i64) -> Result {
-        self.check_with_code(unsafe { inner::nix_init_int(self.0, out_value, int) })
-    }
-
-    pub fn get_path(&self, value: *const nix::Value) -> Result<*const core::ffi::c_char> {
-        let value_type = self.get_type(value)?;
-        if value_type == inner::ValueType_NIX_TYPE_PATH {
-            self.check(unsafe { inner::nix_get_path_string(self.0, value) })
-        } else {
-            Err(Error::custom(c"Value is not a path"))
-        }
-    }
-
-    pub fn set_path(
-        &self,
-        state: *mut nix::State,
-        out_value: *mut nix::Value,
-        path: *const core::ffi::c_char,
-    ) -> Result {
-        self.check_with_code(unsafe { inner::nix_init_path_string(self.0, state, out_value, path) })
+    pub fn create_value(&self, state: *mut nix::State) -> Result<Value> {
+        Value::new(self, state)
     }
 }
 
 impl Context {
-    fn check<T>(&self, value: T) -> Result<T> {
-        self.check_internal(value, unsafe { inner::nix_err_code(self.0) })
+    fn check<T, F: FnOnce(*mut nix::RawContext) -> T>(&self, f: F) -> Result<T> {
+        self.check_internal(f(self.0), unsafe { inner::nix_err_code(self.0) })
     }
 
-    fn check_with_code(&self, code: nix::Error) -> Result {
-        self.check_internal((), code)
+    fn check_with_code<F: FnOnce(*mut nix::RawContext) -> nix::Error>(&self, f: F) -> Result {
+        self.check_internal((), f(self.0))
     }
 
     fn check_internal<T>(&self, value: T, code: nix::Error) -> Result<T> {
@@ -84,10 +47,6 @@ impl Context {
             let len = len as usize;
             Err(Error::new(code, message, len))
         }
-    }
-
-    fn get_type(&self, value: *const nix::Value) -> Result<nix::ValueType> {
-        self.check(unsafe { inner::nix_get_type(self.0, value) })
     }
 }
 
@@ -120,9 +79,9 @@ impl<'a> PrimOp<'a> {
             .map_err(|_| Error::custom(c"Could not fit argument count within usize"))?;
 
         context
-            .check(unsafe {
+            .check(|c| unsafe {
                 inner::nix_alloc_primop(
-                    context.as_ptr(),
+                    c,
                     Some(func),
                     len,
                     name.as_ptr(),
@@ -136,13 +95,82 @@ impl<'a> PrimOp<'a> {
 
     fn register(self) -> Result {
         self.context
-            .check(unsafe { inner::nix_register_primop(self.context.as_ptr(), self.primop) })?;
+            .check(|c| unsafe { inner::nix_register_primop(c, self.primop) })?;
         Ok(())
     }
 }
 
 impl Drop for PrimOp<'_> {
     fn drop(&mut self) {
-        unsafe { inner::nix_gc_decref(self.context.as_ptr(), self.primop as *const _) };
+        unsafe { inner::nix_gc_decref(self.context.0, self.primop as *const _) };
+    }
+}
+
+pub struct Value<'a> {
+    value: *mut inner::nix_value,
+    context: &'a Context,
+}
+
+impl<'a> Value<'a> {
+    pub fn own(context: &'a Context, value: *mut inner::nix_value) -> Result<Self> {
+        context
+            .check_with_code(|c| unsafe { inner::nix_gc_incref(c, value as *const _) })
+            .map(|()| Self { value, context })
+    }
+
+    fn new(context: &'a Context, state: *mut nix::State) -> Result<Self> {
+        context
+            .check(|c| unsafe { inner::nix_alloc_value(c, state) })
+            .map(|value| Self { value, context })
+    }
+}
+
+impl Value<'_> {
+    pub fn eval(&self, state: *mut nix::State) -> Result {
+        self.context
+            .check_with_code(|c| unsafe { inner::nix_value_force(c, state, self.value) })
+    }
+
+    pub fn get_int(&self) -> Result<i64> {
+        let value_type = self.get_type()?;
+        if value_type == inner::ValueType_NIX_TYPE_INT {
+            self.context
+                .check(|c| unsafe { inner::nix_get_int(c, self.value) })
+        } else {
+            Err(Error::custom(c"Value is not an integer"))
+        }
+    }
+
+    pub fn set_int(&self, value: i64) -> Result {
+        self.context
+            .check_with_code(|c| unsafe { inner::nix_init_int(c, self.value, value) })
+    }
+
+    pub fn get_path(&self) -> Result<*const core::ffi::c_char> {
+        let value_type = self.get_type()?;
+        if value_type == inner::ValueType_NIX_TYPE_PATH {
+            self.context
+                .check(|c| unsafe { inner::nix_get_path_string(c, self.value) })
+        } else {
+            Err(Error::custom(c"Value is not a path"))
+        }
+    }
+
+    pub fn set_path(&self, state: *mut nix::State, path: *const core::ffi::c_char) -> Result {
+        self.context
+            .check_with_code(|c| unsafe { inner::nix_init_path_string(c, state, self.value, path) })
+    }
+}
+
+impl Value<'_> {
+    fn get_type(&self) -> Result<nix::ValueType> {
+        self.context
+            .check(|c| unsafe { inner::nix_get_type(c, self.value) })
+    }
+}
+
+impl Drop for Value<'_> {
+    fn drop(&mut self) {
+        unsafe { inner::nix_gc_decref(self.context.0, self.value as *const _) };
     }
 }
