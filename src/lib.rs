@@ -1,7 +1,7 @@
 mod error;
 mod nix;
 
-use error::Result;
+use error::{Error, Result};
 use nix::Context;
 
 macro_rules! c_array {
@@ -36,7 +36,7 @@ impl Log {
         F: Fn(&mut dyn std::io::Write) -> std::io::Result<R>,
     {
         f(std::ops::DerefMut::deref_mut(&mut self.get()))
-            .map_err(|_| error::Error::custom(c"Failed to write to log"))
+            .map_err(|err| error::Error::custom(format!("Failed to write to log: {err}")))
     }
 }
 
@@ -54,18 +54,37 @@ extern "C" fn increment(
         out_value: *mut nix::RawValue,
     ) -> Result {
         let context = Context::new();
+        context.init()?;
         let arg = nix::Value::own(&context, unsafe { *args })?;
 
         arg.eval(state)?;
 
-        let path = arg.get_path()?;
-        let path_str = unsafe { core::ffi::CStr::from_ptr(path) };
-        let path_copy = Vec::from(path_str.to_bytes_with_nul());
-        // let new_value = context.create_value(state)?;
+        LOG.write(|f| writeln!(f, "State: {state:?}"))?;
 
-        LOG.write(|f| writeln!(f, "{path_str:?} :: {path_copy:?}"))?;
+        let path_str = unsafe { core::ffi::CStr::from_ptr(arg.get_path()?) };
+        let path =
+            <std::ffi::OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(path_str.to_bytes());
+        let mut file = std::fs::File::open(path)
+            .map_err(|err| Error::custom(format!("Could not open the referenced file: {err}")))?;
+
+        let mut file_content = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut file_content)
+            .map_err(|err| Error::custom(format!("Failed to read file: {err}")))?;
+        file_content.push(0);
+
+        LOG.write(|f| {
+            write!(f, "{path_str:?} :: ")?;
+            f.write_all(&file_content)
+        })?;
+
+        let evaluated = context.eval(state, file_content.as_ptr().cast(), path_str.as_ptr())?;
+        LOG.write(|f| writeln!(f, "Evaluated"))?;
+        let a = evaluated.get_int()?;
+
+        LOG.write(|f| writeln!(f, "{a}"))?;
+
         let out_value = nix::Value::own(&context, out_value)?;
-        out_value.set_path(state, path_copy.as_ptr())?;
+        out_value.set_path(state, file_content.as_ptr().cast())?;
 
         Ok(())
     }

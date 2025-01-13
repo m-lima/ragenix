@@ -1,176 +1,134 @@
 #![allow(dead_code)]
 
-use crate::{
-    error::{Error, Result},
-    nix::{self, inner},
-};
+use crate::nix::{self, inner};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Context(*mut nix::RawContext);
+#[derive(Debug)]
+pub struct Context<const OWNED: bool> {
+    context: *mut inner::nix_c_context,
+}
 
-impl Context {
+impl Context<true> {
     pub fn new() -> Self {
-        Self(unsafe { inner::nix_c_context_create() })
-    }
-
-    pub fn create_primop(
-        &self,
-        func: nix::PrimOpFunc,
-        name: &'static core::ffi::CStr,
-        args: &mut [*const core::ffi::c_char],
-        doc: &'static core::ffi::CStr,
-    ) -> Result {
-        let primop = PrimOp::new(self, func, name, args, doc)?;
-        primop.register()
-    }
-
-    pub fn create_value(&self, state: *mut nix::State) -> Result<Value> {
-        Value::new(self, state)
+        Self {
+            context: unsafe { inner::nix_c_context_create() },
+        }
     }
 }
 
-impl Context {
-    fn check<T, F: FnOnce(*mut nix::RawContext) -> T>(&self, f: F) -> Result<T> {
-        self.check_internal(f(self.0), unsafe { inner::nix_err_code(self.0) })
+impl Context<false> {
+    pub fn wrap(context: *mut inner::nix_c_context) -> Self {
+        Self { context }
     }
 
-    fn check_with_code<F: FnOnce(*mut nix::RawContext) -> nix::Error>(&self, f: F) -> Result {
-        self.check_internal((), f(self.0))
+    pub fn to_owned(&self) -> nix::Result<Context<true>> {
+        self.check(|c| unsafe { inner::nix_gc_incref(c, self.context as *const _) })?;
+        Ok(Context {
+            context: self.context,
+        })
     }
 
-    fn check_internal<T>(&self, value: T, code: nix::Error) -> Result<T> {
+    // pub fn create_primop(
+    //     &self,
+    //     func: nix::PrimOpFunc,
+    //     name: &'static core::ffi::CStr,
+    //     args: &mut [*const core::ffi::c_char],
+    //     doc: &'static core::ffi::CStr,
+    // ) -> Result {
+    //     let primop = PrimOp::new(self, func, name, args, doc)?;
+    //     primop.register()
+    // }
+
+    // pub fn create_value(&self, state: *mut nix::State) -> Result<Value> {
+    //     Value::new(self, state)
+    // }
+    //
+    // pub fn create_store(&self) -> Result<Store> {
+    //     self.check_with_code(|c| unsafe { inner::nix_libstore_init(c) })
+    //         .and_then(|()| Store::new(self))
+    // }
+    //
+    // pub fn create_state(&self, store: &Store) {
+    //     self.check_with_code(|c| unsafe { inner::nix_libexpr_init(c) })
+    //         .and_then(|()| State::new(self))
+    // }
+    //
+    // pub fn eval(
+    //     &self,
+    //     state: *mut nix::State,
+    //     expr: *const core::ffi::c_char,
+    //     path: *const core::ffi::c_char,
+    // ) -> Result<Value> {
+    //     self.check_with_code(|c| unsafe { inner::nix_libexpr_init(c) })?;
+    //     let value = Value::new(self, state)?;
+    //     self.check_with_code(|c| unsafe {
+    //         inner::nix_expr_eval_from_string(c, state, expr, path, value.value)
+    //     })?;
+    //     Ok(value)
+    // }
+    //
+    // pub fn bork_all(state: *mut nix::State) {
+    //     unsafe { inner::nix_state_free(state) };
+    // }
+    //
+    // pub fn init(&self) -> Result {
+    //     self.init_expr()
+    //         .and_then(|()| self.init_util())
+    //         .and_then(|()| self.init_store())
+    // }
+    //
+    // pub fn init_expr(&self) -> Result {
+    //     self.check_with_code(|c| unsafe { inner::nix_libexpr_init(c) })
+    // }
+    //
+    // pub fn init_util(&self) -> Result {
+    //     self.check_with_code(|c| unsafe { inner::nix_libutil_init(c) })
+    // }
+    //
+    // pub fn init_store(&self) -> Result {
+    //     self.check_with_code(|c| unsafe { inner::nix_libstore_init(c) })
+    // }
+}
+
+impl<const OWNED: bool> Context<OWNED> {
+    fn inner_check<T>(&self, value: T, code: inner::nix_err) -> nix::Result<T> {
         if code == inner::nix_err_NIX_OK {
             Ok(value)
         } else {
             let mut len = 0;
-            let message = unsafe { inner::nix_err_msg(core::ptr::null_mut(), self.0, &mut len) };
+            let message =
+                unsafe { inner::nix_err_msg(core::ptr::null_mut(), self.context, &mut len) };
             let len = len as usize;
-            Err(Error::new(code, message, len))
+            Err(nix::Error::wrap(code, message, len))
         }
     }
 }
 
-impl crate::error::Reporter for Context {
-    fn report(self, code: nix::Error, message: *const core::ffi::c_char) {
-        self.0.report(code, message);
-    }
-}
-
-impl Drop for Context {
+impl<const OWNED: bool> Drop for Context<OWNED> {
     fn drop(&mut self) {
-        unsafe { inner::nix_c_context_free(self.0) };
-    }
-}
-
-struct PrimOp<'a> {
-    primop: *mut inner::PrimOp,
-    context: &'a Context,
-}
-
-impl<'a> PrimOp<'a> {
-    fn new(
-        context: &'a Context,
-        func: nix::PrimOpFunc,
-        name: &'static core::ffi::CStr,
-        args: &mut [*const core::ffi::c_char],
-        doc: &'static core::ffi::CStr,
-    ) -> Result<Self> {
-        let len = core::ffi::c_int::try_from(args.len().min(1) - 1)
-            .map_err(|_| Error::custom(c"Could not fit argument count within usize"))?;
-
-        context
-            .check(|c| unsafe {
-                inner::nix_alloc_primop(
-                    c,
-                    Some(func),
-                    len,
-                    name.as_ptr(),
-                    args.as_mut_ptr().cast(),
-                    doc.as_ptr(),
-                    core::ptr::null_mut(),
-                )
-            })
-            .map(|primop| Self { primop, context })
-    }
-
-    fn register(self) -> Result {
-        self.context
-            .check(|c| unsafe { inner::nix_register_primop(c, self.primop) })?;
-        Ok(())
-    }
-}
-
-impl Drop for PrimOp<'_> {
-    fn drop(&mut self) {
-        unsafe { inner::nix_gc_decref(self.context.0, self.primop as *const _) };
-    }
-}
-
-pub struct Value<'a> {
-    value: *mut inner::nix_value,
-    context: &'a Context,
-}
-
-impl<'a> Value<'a> {
-    pub fn own(context: &'a Context, value: *mut inner::nix_value) -> Result<Self> {
-        context
-            .check_with_code(|c| unsafe { inner::nix_gc_incref(c, value as *const _) })
-            .map(|()| Self { value, context })
-    }
-
-    fn new(context: &'a Context, state: *mut nix::State) -> Result<Self> {
-        context
-            .check(|c| unsafe { inner::nix_alloc_value(c, state) })
-            .map(|value| Self { value, context })
-    }
-}
-
-impl Value<'_> {
-    pub fn eval(&self, state: *mut nix::State) -> Result {
-        self.context
-            .check_with_code(|c| unsafe { inner::nix_value_force(c, state, self.value) })
-    }
-
-    pub fn get_int(&self) -> Result<i64> {
-        let value_type = self.get_type()?;
-        if value_type == inner::ValueType_NIX_TYPE_INT {
-            self.context
-                .check(|c| unsafe { inner::nix_get_int(c, self.value) })
-        } else {
-            Err(Error::custom(c"Value is not an integer"))
+        if OWNED {
+            unsafe { inner::nix_c_context_free(self.context) };
         }
     }
-
-    pub fn set_int(&self, value: i64) -> Result {
-        self.context
-            .check_with_code(|c| unsafe { inner::nix_init_int(c, self.value, value) })
-    }
-
-    pub fn get_path(&self) -> Result<*const core::ffi::c_char> {
-        let value_type = self.get_type()?;
-        if value_type == inner::ValueType_NIX_TYPE_PATH {
-            self.context
-                .check(|c| unsafe { inner::nix_get_path_string(c, self.value) })
-        } else {
-            Err(Error::custom(c"Value is not a path"))
-        }
-    }
-
-    pub fn set_path(&self, state: *mut nix::State, path: *const core::ffi::c_char) -> Result {
-        self.context
-            .check_with_code(|c| unsafe { inner::nix_init_path_string(c, state, self.value, path) })
-    }
 }
 
-impl Value<'_> {
-    fn get_type(&self) -> Result<nix::ValueType> {
-        self.context
-            .check(|c| unsafe { inner::nix_get_type(c, self.value) })
-    }
+pub(super) trait AsContext {
+    fn as_context(&self) -> *mut inner::nix_c_context;
+    fn check<F: FnOnce(*mut inner::nix_c_context) -> inner::nix_err>(&self, f: F) -> nix::Result;
+    fn with_check<T, F: FnOnce(*mut inner::nix_c_context) -> T>(&self, f: F) -> nix::Result<T>;
 }
 
-impl Drop for Value<'_> {
-    fn drop(&mut self) {
-        unsafe { inner::nix_gc_decref(self.context.0, self.value as *const _) };
+impl<const OWNED: bool> AsContext for Context<OWNED> {
+    fn as_context(&self) -> *mut inner::nix_c_context {
+        self.context
+    }
+
+    fn check<F: FnOnce(*mut inner::nix_c_context) -> inner::nix_err>(&self, f: F) -> nix::Result {
+        self.inner_check((), f(self.context))
+    }
+
+    fn with_check<T, F: FnOnce(*mut inner::nix_c_context) -> T>(&self, f: F) -> nix::Result<T> {
+        self.inner_check(f(self.context), unsafe {
+            inner::nix_err_code(self.context)
+        })
     }
 }

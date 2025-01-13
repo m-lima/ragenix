@@ -10,24 +10,20 @@ mod inner {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
+mod args;
+mod array;
 mod context;
-pub use context::{Context, Value};
+mod error;
+mod primop;
+mod state;
+mod value;
 
-pub use inner::{
-    nix_c_context as RawContext, nix_err as Error, nix_err_NIX_ERR_UNKNOWN as ERR_UNKNOWN,
-    nix_value as RawValue, EvalState as State, ValueType,
-};
+pub use context::Context;
+pub use error::{Error, Result};
+pub use state::State;
+pub use value::Value;
 
-pub type PrimOpFunc = unsafe extern "C" fn(
-    user_data: *mut ::core::ffi::c_void,
-    context: *mut RawContext,
-    state: *mut State,
-    args: *mut *mut RawValue,
-    ret: *mut RawValue,
-);
-
-impl crate::error::Reporter for *mut RawContext {
-    fn report(self, code: Error, message: *const core::ffi::c_char) {
-        unsafe { inner::nix_set_err_msg(self, code, message) };
-    }
-}
+// use inner::{
+//     nix_c_context as RawContext, nix_err as RawError, nix_err_NIX_ERR_UNKNOWN as ERR_UNKNOWN,
+//     nix_value as RawValue, EvalState as RawState, ValueType,
+// };
