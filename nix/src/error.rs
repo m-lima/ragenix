@@ -1,14 +1,14 @@
-use crate::nix::{self, inner};
+use crate::{context::AsContext, nix};
 
 #[derive(Debug)]
 pub enum Error {
     Static {
-        code: inner::nix_err,
+        code: nix::nix_err,
         message: *const core::ffi::c_char,
         len: usize,
     },
     String {
-        code: inner::nix_err,
+        code: nix::nix_err,
         message: std::ffi::CString,
     },
 }
@@ -18,24 +18,20 @@ impl Error {
         initializer.to_error()
     }
 
-    pub fn report<C: nix::context::AsContext>(&self, context: &C) {
+    pub fn report<C: AsContext>(&self, context: &C) {
         let (code, message) = match self {
             Error::Static { code, message, .. } => (*code, *message),
             Error::String { code, message } => (*code, message.as_ptr()),
         };
 
-        let _ = context.check(|c| unsafe { inner::nix_set_err_msg(c, code, message) });
+        let _ = context.check(|c| unsafe { nix::nix_set_err_msg(c, code, message) });
         #[cfg(feature = "log")]
         let _ = crate::log::write(|f| writeln!(f, "{self}"));
     }
 }
 
 impl Error {
-    pub(super) fn wrap(
-        code: inner::nix_err,
-        message: *const core::ffi::c_char,
-        len: usize,
-    ) -> Self {
+    pub(super) fn wrap(code: nix::nix_err, message: *const core::ffi::c_char, len: usize) -> Self {
         Self::Static { code, message, len }
     }
 }
@@ -76,14 +72,14 @@ pub trait Initialiazer {
 impl Initialiazer for &'static core::ffi::CStr {
     fn to_error(self) -> Error {
         let len = self.count_bytes();
-        Error::wrap(inner::nix_err_NIX_ERR_UNKNOWN, self.as_ptr(), len)
+        Error::wrap(nix::nix_err_NIX_ERR_UNKNOWN, self.as_ptr(), len)
     }
 }
 
 impl Initialiazer for std::ffi::CString {
     fn to_error(self) -> Error {
         Error::String {
-            code: inner::nix_err_NIX_ERR_UNKNOWN,
+            code: nix::nix_err_NIX_ERR_UNKNOWN,
             message: self,
         }
     }
@@ -101,7 +97,7 @@ impl Initialiazer for String {
             }
         };
         Error::String {
-            code: inner::nix_err_NIX_ERR_UNKNOWN,
+            code: nix::nix_err_NIX_ERR_UNKNOWN,
             message,
         }
     }

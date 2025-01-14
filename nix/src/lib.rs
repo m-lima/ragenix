@@ -1,4 +1,7 @@
-mod inner {
+#![deny(warnings, clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+
+mod nix {
     #![allow(
         dead_code,
         non_camel_case_types,
@@ -17,14 +20,12 @@ mod primop;
 mod state;
 mod value;
 
+#[cfg(feature = "log")]
+pub mod log;
+
 pub use args::Args;
 pub use context::Context;
 pub use error::{Error, Result};
 pub use primop::PrimOp;
 pub use state::State;
 pub use value::{Type as ValueType, Value};
-
-// use inner::{
-//     nix_c_context as RawContext, nix_err as RawError, nix_err_NIX_ERR_UNKNOWN as ERR_UNKNOWN,
-//     nix_value as RawValue, EvalState as RawState, ValueType,
-// };

@@ -1,4 +1,4 @@
-use crate::nix::{Error, Result};
+use crate::{Error, Result};
 
 static LOG: Log = Log::new();
 

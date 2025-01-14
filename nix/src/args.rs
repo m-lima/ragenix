@@ -1,29 +1,29 @@
-use crate::nix::{self, inner};
+use crate::{nix, state::AsState, Error, Result, Value};
 
-pub struct Args<'a, S: nix::state::AsState> {
-    values: &'static mut [*mut inner::nix_value],
+pub struct Args<'a, S: AsState> {
+    values: &'static mut [*mut nix::nix_value],
     state: &'a S,
 }
 
-impl<'a, S: nix::state::AsState> Args<'a, S> {
-    pub fn wrap(values: *mut *mut inner::nix_value, state: &'a S) -> nix::Result<Self> {
+impl<'a, S: AsState> Args<'a, S> {
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn wrap(values: *mut *mut nix::nix_value, state: &'a S) -> Result<Self> {
         let len = detect_size(values)
-            .ok_or_else(|| nix::Error::custom(c"Cannot have more than 16 argumente"))?;
+            .ok_or_else(|| Error::custom(c"Cannot have more than 16 argumente"))?;
 
         let values = unsafe { std::slice::from_raw_parts_mut(values, len) };
         Ok(Self { values, state })
     }
 }
 
-impl<S: nix::state::AsState> Args<'_, S> {
-    pub fn get(&self, index: usize) -> Option<nix::Value<'_, S, false>> {
-        self.values
-            .get(index)
-            .map(|v| nix::Value::wrap(*v, self.state))
+impl<S: AsState> Args<'_, S> {
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<Value<'_, S, false>> {
+        self.values.get(index).map(|v| Value::wrap(*v, self.state))
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = nix::Value<'_, S, false>> {
-        self.values.iter().map(|v| nix::Value::wrap(*v, self.state))
+    pub fn iter(&self) -> impl Iterator<Item = Value<'_, S, false>> {
+        self.values.iter().map(|v| Value::wrap(*v, self.state))
     }
 }
 

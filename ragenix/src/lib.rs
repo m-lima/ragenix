@@ -1,9 +1,4 @@
 #![deny(warnings, clippy::pedantic)]
-#![allow(dead_code, unused_imports)]
-
-#[cfg(feature = "log")]
-mod log;
-mod nix;
 
 macro_rules! c_array {
     ($($value: literal),*) => {

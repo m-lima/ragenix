@@ -1,21 +1,14 @@
-[package]
-name = "ragenix"
+[workspace]
+members = [
+  "nix",
+  "ragenix",
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
-
-[features]
-log = []
-
-[lib]
-crate-type = ["cdylib"]
 
 [profile.release]
 strip = true
 lto = true
-
-[dependencies]
-age = { version = "0.11.1", features = ["armor", "plugin", "ssh"] }
-
-[build-dependencies]
-bindgen = "0.71.1"
-pkg-config = "0.3.31"
