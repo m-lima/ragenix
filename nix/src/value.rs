@@ -45,6 +45,15 @@ impl<S: AsState> Value<'_, S, false> {
         })
     }
 
+    pub fn set<OS: AsState, const OTHER_OWNED: bool>(
+        &self,
+        other: &Value<'_, OS, OTHER_OWNED>,
+    ) -> Result {
+        self.state
+            .context()
+            .check(|c| unsafe { nix::nix_copy_value(c, self.value, other.value) })
+    }
+
     pub fn get_int(&self) -> Result<i64> {
         let value_type = self.get_type()?;
         if value_type == Type::Int {
@@ -60,6 +69,26 @@ impl<S: AsState> Value<'_, S, false> {
         self.state
             .context()
             .check(|c| unsafe { nix::nix_init_int(c, self.value, value) })
+    }
+
+    pub fn get_path(&self) -> Result<&core::ffi::CStr> {
+        let value_type = self.get_type()?;
+        if value_type == Type::Path {
+            self.state
+                .context()
+                .with_check(|c| unsafe { nix::nix_get_path_string(c, self.value) })
+                .map(|s| unsafe { core::ffi::CStr::from_ptr(s) })
+        } else {
+            Err(Error::custom(c"Value is not a path"))
+        }
+    }
+
+    pub fn set_path(&self, value: &core::ffi::CStr) -> Result {
+        self.state.context().check(|c| {
+            self.state.with_state(|s| unsafe {
+                nix::nix_init_path_string(c, s, self.value, value.as_ptr())
+            })
+        })
     }
 }
 

@@ -18,8 +18,8 @@ fn load(
 
     arg.eval()?;
 
-    let int = arg.get_int()?;
-    out.set_int(int)
+    let value = arg.get_int()?;
+    out.set_int(value)
 }
 
 #[no_mangle]
