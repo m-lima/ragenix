@@ -32,34 +32,21 @@ impl<C: nix::context::AsContext, const OWNED: bool> Drop for State<'_, C, OWNED>
     }
 }
 
-// pub(super) trait AsState: nix::context::AsContext {
-pub(super) trait AsState {
+pub trait AsState {
     type Context: nix::context::AsContext;
 
-    fn as_state(&self) -> *mut inner::EvalState;
-    fn context<'a>(&'a self) -> &'a Self::Context;
+    fn with_state<F: FnOnce(*mut inner::EvalState) -> R, R>(&self, f: F) -> R;
+    fn context(&self) -> &Self::Context;
 }
 
-impl<'a, C: nix::context::AsContext, const OWNED: bool> AsState for State<'a, C, OWNED> {
+impl<C: nix::context::AsContext, const OWNED: bool> AsState for State<'_, C, OWNED> {
     type Context = C;
 
-    fn as_state(&self) -> *mut inner::EvalState {
-        self.state
+    fn with_state<F: FnOnce(*mut inner::EvalState) -> R, R>(&self, f: F) -> R {
+        f(self.state)
     }
 
-    fn context<'b>(&'b self) -> &'b Self::Context {
+    fn context(&self) -> &Self::Context {
         self.context
     }
 }
-
-// impl<'a, C: nix::context::AsContext, const OWNED: bool> nix::context::AsContext
-//     for State<'a, C, OWNED>
-// {
-//     fn check<F: FnOnce(*mut inner::nix_c_context) -> inner::nix_err>(&self, f: F) -> nix::Result {
-//         self.context.check(f)
-//     }
-//
-//     fn with_check<T, F: FnOnce(*mut inner::nix_c_context) -> T>(&self, f: F) -> nix::Result<T> {
-//         self.context.with_check(f)
-//     }
-// }

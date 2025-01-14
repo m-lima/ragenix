@@ -11,17 +11,18 @@ mod inner {
 }
 
 mod args;
-mod array;
 mod context;
 mod error;
 mod primop;
 mod state;
 mod value;
 
+pub use args::Args;
 pub use context::Context;
 pub use error::{Error, Result};
+pub use primop::PrimOp;
 pub use state::State;
-pub use value::Value;
+pub use value::{Type as ValueType, Value};
 
 // use inner::{
 //     nix_c_context as RawContext, nix_err as RawError, nix_err_NIX_ERR_UNKNOWN as ERR_UNKNOWN,

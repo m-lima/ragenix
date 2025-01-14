@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::nix::{self, inner};
 
 #[derive(Debug)]
@@ -111,17 +109,12 @@ impl<const OWNED: bool> Drop for Context<OWNED> {
     }
 }
 
-pub(super) trait AsContext {
-    fn as_context(&self) -> *mut inner::nix_c_context;
+pub trait AsContext {
     fn check<F: FnOnce(*mut inner::nix_c_context) -> inner::nix_err>(&self, f: F) -> nix::Result;
     fn with_check<T, F: FnOnce(*mut inner::nix_c_context) -> T>(&self, f: F) -> nix::Result<T>;
 }
 
 impl<const OWNED: bool> AsContext for Context<OWNED> {
-    fn as_context(&self) -> *mut inner::nix_c_context {
-        self.context
-    }
-
     fn check<F: FnOnce(*mut inner::nix_c_context) -> inner::nix_err>(&self, f: F) -> nix::Result {
         self.inner_check((), f(self.context))
     }

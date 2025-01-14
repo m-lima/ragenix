@@ -1,8 +1,9 @@
-mod error;
-mod nix;
+#![deny(warnings, clippy::pedantic)]
+#![allow(dead_code, unused_imports)]
 
-use error::{Error, Result};
-use nix::Context;
+#[cfg(feature = "log")]
+mod log;
+mod nix;
 
 macro_rules! c_array {
     ($($value: literal),*) => {
@@ -10,101 +11,36 @@ macro_rules! c_array {
     }
 }
 
-static LOG: Log = Log::new();
+fn load<'c, 's>(
+    _context: &'c nix::Context<false>,
+    _state: &'s nix::State<'c, nix::Context<false>, false>,
+    args: &nix::Args<'s, nix::State<'c, nix::Context<false>, false>>,
+    out: &nix::Value<'s, nix::State<'c, nix::Context<false>, false>, false>,
+) -> nix::Result {
+    let arg = args
+        .get(0)
+        .ok_or_else(|| nix::Error::custom(c"Expected a single argument"))?;
 
-struct Log(std::sync::LazyLock<std::sync::Mutex<std::fs::File>>);
+    arg.eval()?;
 
-impl Log {
-    const fn new() -> Self {
-        Self(std::sync::LazyLock::new(|| {
-            std::sync::Mutex::new(
-                std::fs::File::options()
-                    .create(true)
-                    .append(true)
-                    .open("/tmp/ragenix.log")
-                    .unwrap(),
-            )
-        }))
-    }
-
-    fn get(&self) -> std::sync::MutexGuard<'_, std::fs::File> {
-        self.0.lock().unwrap()
-    }
-
-    fn write<F, R>(&self, f: F) -> Result<R>
-    where
-        F: Fn(&mut dyn std::io::Write) -> std::io::Result<R>,
-    {
-        f(std::ops::DerefMut::deref_mut(&mut self.get()))
-            .map_err(|err| error::Error::custom(format!("Failed to write to log: {err}")))
-    }
-}
-
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-extern "C" fn increment(
-    _: *mut ::core::ffi::c_void,
-    context: *mut nix::RawContext,
-    state: *mut nix::State,
-    args: *mut *mut nix::RawValue,
-    out_value: *mut nix::RawValue,
-) {
-    fn increment(
-        state: *mut nix::State,
-        args: *mut *mut nix::RawValue,
-        out_value: *mut nix::RawValue,
-    ) -> Result {
-        let context = Context::new();
-        context.init()?;
-        let arg = nix::Value::own(&context, unsafe { *args })?;
-
-        arg.eval(state)?;
-
-        LOG.write(|f| writeln!(f, "State: {state:?}"))?;
-
-        let path_str = unsafe { core::ffi::CStr::from_ptr(arg.get_path()?) };
-        let path =
-            <std::ffi::OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(path_str.to_bytes());
-        let mut file = std::fs::File::open(path)
-            .map_err(|err| Error::custom(format!("Could not open the referenced file: {err}")))?;
-
-        let mut file_content = Vec::new();
-        std::io::Read::read_to_end(&mut file, &mut file_content)
-            .map_err(|err| Error::custom(format!("Failed to read file: {err}")))?;
-        file_content.push(0);
-
-        LOG.write(|f| {
-            write!(f, "{path_str:?} :: ")?;
-            f.write_all(&file_content)
-        })?;
-
-        let evaluated = context.eval(state, file_content.as_ptr().cast(), path_str.as_ptr())?;
-        LOG.write(|f| writeln!(f, "Evaluated"))?;
-        let a = evaluated.get_int()?;
-
-        LOG.write(|f| writeln!(f, "{a}"))?;
-
-        let out_value = nix::Value::own(&context, out_value)?;
-        out_value.set_path(state, file_content.as_ptr().cast())?;
-
-        Ok(())
-    }
-
-    if let Err(error) = increment(state, args, out_value) {
-        error.report(context);
-    }
+    let int = arg.get_int()?;
+    out.set_int(int)
 }
 
 #[no_mangle]
 pub extern "C" fn nix_plugin_entry() {
-    static mut ARGS: &mut [*const core::ffi::c_char; 2] = &mut c_array![c"number"];
+    static mut ARGS: &mut [*const core::ffi::c_char; 2] = &mut c_array![c"path"];
 
-    let context = Context::new();
-    if let Err(error) = context.create_primop(
-        increment,
-        c"increment",
+    let context = nix::Context::new();
+    if let Err(error) = nix::PrimOp::new(
+        &context,
+        Box::new(load),
+        c"decrypt",
         unsafe { ARGS },
-        c"Increment the value",
-    ) {
-        error.report(context);
+        c"Decrypt and evaluate a file",
+    )
+    .and_then(nix::PrimOp::register)
+    {
+        error.report(&context);
     }
 }

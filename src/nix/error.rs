@@ -24,7 +24,9 @@ impl Error {
             Error::String { code, message } => (*code, message.as_ptr()),
         };
 
-        unsafe { inner::nix_set_err_msg(context.as_context(), code, message) };
+        let _ = context.check(|c| unsafe { inner::nix_set_err_msg(c, code, message) });
+        #[cfg(feature = "log")]
+        let _ = crate::log::write(|f| writeln!(f, "{self}"));
     }
 }
 
