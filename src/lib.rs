@@ -11,11 +11,11 @@ macro_rules! c_array {
     }
 }
 
-fn load<'c, 's>(
-    _context: &'c nix::Context<false>,
-    _state: &'s nix::State<'c, nix::Context<false>, false>,
-    args: &nix::Args<'s, nix::State<'c, nix::Context<false>, false>>,
-    out: &nix::Value<'s, nix::State<'c, nix::Context<false>, false>, false>,
+fn load(
+    _context: &nix::Context<false>,
+    _state: &nix::State<'_, nix::Context<false>, false>,
+    args: &nix::Args<'_, nix::State<'_, nix::Context<false>, false>>,
+    out: &nix::Value<'_, nix::State<'_, nix::Context<false>, false>, false>,
 ) -> nix::Result {
     let arg = args
         .get(0)
@@ -34,7 +34,7 @@ pub extern "C" fn nix_plugin_entry() {
     let context = nix::Context::new();
     if let Err(error) = nix::PrimOp::new(
         &context,
-        Box::new(load),
+        load,
         c"decrypt",
         unsafe { ARGS },
         c"Decrypt and evaluate a file",

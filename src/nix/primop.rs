@@ -1,12 +1,11 @@
 use crate::nix::{self, inner};
 
-pub type PrimOpFunc<const CO: bool = false, const SO: bool = false, const VO: bool = false> =
-    dyn for<'c, 's> Fn(
-        &'c nix::Context<CO>,
-        &'s nix::State<'c, nix::Context<CO>, SO>,
-        &nix::Args<'s, nix::State<'c, nix::Context<CO>, SO>>,
-        &nix::Value<'s, nix::State<'c, nix::Context<CO>, SO>, VO>,
-    ) -> nix::Result;
+pub type PrimOpFunc = fn(
+    &nix::Context<false>,
+    &nix::State<'_, nix::Context<false>, false>,
+    &nix::Args<'_, nix::State<'_, nix::Context<false>, false>>,
+    &nix::Value<'_, nix::State<'_, nix::Context<false>, false>, false>,
+) -> nix::Result;
 
 pub struct PrimOp<'a, C: nix::context::AsContext> {
     primop: *mut inner::PrimOp,
@@ -16,17 +15,13 @@ pub struct PrimOp<'a, C: nix::context::AsContext> {
 impl<'a, C: nix::context::AsContext> PrimOp<'a, C> {
     pub fn new(
         context: &'a C,
-        func: Box<PrimOpFunc>,
+        func: PrimOpFunc,
         name: &'static core::ffi::CStr,
         args: &mut [*const core::ffi::c_char],
         doc: &'static core::ffi::CStr,
     ) -> nix::Result<Self> {
         let len = core::ffi::c_int::try_from(args.len().min(1) - 1)
             .map_err(|_| nix::Error::custom(c"Could not fit argument count within usize"))?;
-
-        let func = Box::leak(func);
-        #[cfg(feature = "log")]
-        crate::log::write(|f| writeln!(f, "Incoming {:?}", core::ptr::from_ref(func)))?;
 
         context
             .with_check(|c| unsafe {
@@ -37,7 +32,7 @@ impl<'a, C: nix::context::AsContext> PrimOp<'a, C> {
                     name.as_ptr(),
                     args.as_mut_ptr().cast(),
                     doc.as_ptr(),
-                    core::ptr::from_mut(func).cast(),
+                    func as *mut _,
                 )
             })
             .map(|primop| Self { primop, context })
@@ -83,22 +78,7 @@ extern "C" fn wrapper(
         let args = nix::Args::wrap(args, &state)?;
         let out_value = nix::Value::wrap(out_value, &state);
 
-        let func: *mut PrimOpFunc = {
-            let raw = unsafe {
-                core::slice::from_raw_parts_mut(
-                    data.cast::<u8>(),
-                    core::mem::size_of::<*mut PrimOpFunc>(),
-                )
-            };
-            let raw: [u8; core::mem::size_of::<*mut PrimOpFunc>()] =
-                unsafe { core::mem::transmute(raw) };
-            unsafe { std::mem::transmute(raw) }
-        };
-
-        let func = unsafe { func.as_mut() }
-            .ok_or_else(|| nix::Error::custom(c"Pointer to function is invalid"))?;
-        #[cfg(feature = "log")]
-        crate::log::write(|f| writeln!(f, "Outgoing {:?}", core::ptr::from_ref(func)))?;
+        let func: PrimOpFunc = unsafe { core::mem::transmute(data) };
         func(&context, &state, &args, &out_value)
     }
 
