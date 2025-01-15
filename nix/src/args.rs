@@ -11,7 +11,7 @@ impl<'a, S: AsState> Args<'a, S> {
         let len = detect_size(values)
             .ok_or_else(|| Error::custom(c"Cannot have more than 16 argumente"))?;
 
-        let values = unsafe { std::slice::from_raw_parts_mut(values, len) };
+        let values = unsafe { core::slice::from_raw_parts_mut(values, len) };
         Ok(Self { values, state })
     }
 }

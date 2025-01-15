@@ -27,7 +27,7 @@ where
         .lock()
         .map_err(|err| Error::custom(format!("Could not acquire log lock: {err}")))?;
 
-    let Some(file) = std::ops::DerefMut::deref_mut(&mut lock) else {
+    let Some(file) = core::ops::DerefMut::deref_mut(&mut lock) else {
         return Err(Error::custom(c"Could not open log file"));
     };
 
