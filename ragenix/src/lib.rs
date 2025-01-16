@@ -6,11 +6,12 @@ macro_rules! c_array {
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn load(
     _context: &nix::Context<false>,
     _state: &nix::State<'_, nix::Context<false>, false>,
-    args: &nix::Args<'_, nix::State<'_, nix::Context<false>, false>>,
-    out: &nix::Value<'_, nix::State<'_, nix::Context<false>, false>, false>,
+    args: nix::Args<'_, nix::State<'_, nix::Context<false>, false>, 2>,
+    out: nix::Value<'_, nix::State<'_, nix::Context<false>, false>, false>,
 ) -> nix::Result {
     let arg = args
         .get(0)

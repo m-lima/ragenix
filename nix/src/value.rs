@@ -30,7 +30,7 @@ impl<'a, S: AsState> Value<'a, S, false> {
     }
 }
 
-impl<S: AsState> Value<'_, S, false> {
+impl<S: AsState, const OWNED: bool> Value<'_, S, OWNED> {
     pub fn get_type(&self) -> Result<Type> {
         self.state
             .context()
