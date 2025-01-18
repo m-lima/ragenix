@@ -17,3 +17,6 @@ lto = true
 [build-dependencies]
 cc = "1.2.10"
 pkg-config = "0.3.31"
+
+[dependencies]
+rage = "0.11.1"

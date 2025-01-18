@@ -74,6 +74,7 @@ fn generate_outputs(builder: &cc::Build) {
     let mut file = std::fs::File::options()
         .create(true)
         .truncate(true)
+        .write(true)
         .open("compile_commands.json")
         .unwrap();
 
