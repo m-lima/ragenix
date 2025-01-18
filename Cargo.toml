@@ -1,14 +1,15 @@
-[workspace]
-members = [
-  "nix",
-  "ragenix",
-]
-resolver = "2"
-
-[workspace.package]
+[package]
+name = "ragenix"
 version = "0.1.0"
+description = "A evaluation time decryptor plugin for Nix"
 edition = "2021"
+license = "MIT"
+readme = "README.md"
+
+[lib]
+crate-type = [ "cdylib" ]
 
 [profile.release]
+codegen-units = 1
 strip = true
 lto = true
