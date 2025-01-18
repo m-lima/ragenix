@@ -1,47 +1,65 @@
-#include <config-global.hh>
-#include <config.h>
-#include <eval-settings.hh>
-#include <globals.hh>
 #include <primops.hh>
 
-struct Settings : nix::Config {
-  nix::Setting<nix::Path> pubKey{this, nix::settings.nixConfDir + "/key.pub",
-                                 "pubKey",
-                                 "The public key to use for decryption"};
+extern "C" {
+struct RageString {
+  const char *string;
+  const std::size_t len;
+  const std::size_t cap;
+};
+RageString decrypt(const char *path, const char *pubKey, uint8_t &status);
+void dealloc(const RageString &string);
+}
+
+struct RageStringWrapper {
+  const RageString string;
+  RageStringWrapper(const RageString string) : string{string} {}
+  ~RageStringWrapper() { dealloc(string); }
+  inline const char *str() { return string.string; }
 };
 
-Settings settings;
+nix::Value getArg(nix::EvalState &state, const nix::PosIdx pos, nix::Value *arg,
+                  const nix::ValueType type) {
+  if (arg == NULL) {
+    state
+        .error<nix::MissingArgumentError>("expected %1% parameter",
+                                          nix::showType(type))
+        .atPos(pos)
+        .debugThrow();
+  }
+
+  auto value = *arg;
+  state.forceValue(value, pos);
+  if (value.type() != type) {
+    state
+        .error<nix::TypeError>("value is %1% while %2% was expected",
+                               nix::showType(value), nix::showType(type))
+        .atPos(pos)
+        .debugThrow();
+  }
+
+  return value;
+}
 
 void decryptPrimOp(nix::EvalState &state, const nix::PosIdx pos,
                    nix::Value **args, nix::Value &out) {
-  auto pathArg = *args[0];
-  state.forceValue(pathArg, pos);
-  if (pathArg.type() != nix::nPath) {
-    state
-        .error<nix::TypeError>("value is %1% while a path was expectd",
-                               nix::showType(pathArg))
+  auto path = getArg(state, pos, args[0], nix::nPath);
+  auto pubKey = getArg(state, pos, args[1], nix::nString);
+  auto status = uint8_t{0};
+  auto output = RageStringWrapper{
+      decrypt(path.payload.path.path, pubKey.c_str(), status)};
+
+  if (status == 0) {
+    auto expr = state.parseExprFromString(output.str(), path.path());
+    state.eval(expr, out);
+  } else {
+    state.error<nix::EvalError>("could not decrypt %1%", path.payload.path.path)
+        .withTrace(pos, output.str())
         .atPos(pos)
         .debugThrow();
   }
-
-  auto pubKeyArg = *args[1];
-  state.forceValue(pubKeyArg, pos);
-  if (pubKeyArg.type() != nix::nString) {
-    state
-        .error<nix::TypeError>("value is %1% while a string was expectd",
-                               nix::showType(pubKeyArg))
-        .atPos(pos)
-        .debugThrow();
-  }
-
-  auto path = settings.pubKey.get();
-  auto exprStr = std::string{path};
-  exprStr += pubKeyArg.string_view();
-  auto expr = state.parseExprFromString(exprStr, pathArg.path());
-  state.eval(expr, out);
 }
 
-extern "C" void nix_plugin_entry() {
+extern "C" void cpp_entry() {
   nix::RegisterPrimOp primop({
       .name = "__decrypt",
       .args = {"path", "pubkey"},
@@ -50,6 +68,4 @@ extern "C" void nix_plugin_entry() {
       .fun = decryptPrimOp,
       .experimentalFeature = {},
   });
-
-  nix::GlobalConfig::Register config(&settings);
 }

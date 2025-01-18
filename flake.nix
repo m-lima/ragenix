@@ -58,7 +58,13 @@
                   pkg-config
                   rustPlatform.bindgenHook
                 ];
-              buildInputs = with pkgs; deps.args.buildInputs ++ [ nix ];
+              buildInputs =
+                with pkgs;
+                deps.args.buildInputs
+                ++ [
+                  nix
+                  boost
+                ];
             };
 
           build = craneLib.buildPackage main.args;
