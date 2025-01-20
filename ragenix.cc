@@ -43,10 +43,10 @@ nix::Value getArg(nix::EvalState &state, const nix::PosIdx pos, nix::Value *arg,
 void decryptPrimOp(nix::EvalState &state, const nix::PosIdx pos,
                    nix::Value **args, nix::Value &out) {
   auto path = getArg(state, pos, args[0], nix::nPath);
-  auto pubKey = getArg(state, pos, args[1], nix::nString);
+  auto pubKey = getArg(state, pos, args[1], nix::nPath);
   auto status = uint8_t{0};
   auto output = RageStringWrapper{
-      decrypt(path.payload.path.path, pubKey.c_str(), status)};
+      decrypt(path.payload.path.path, pubKey.payload.path.path, status)};
 
   if (status == 0) {
     auto expr = state.parseExprFromString(output.str(), path.path());

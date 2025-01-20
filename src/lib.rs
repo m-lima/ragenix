@@ -21,18 +21,26 @@ pub extern "C" fn decrypt(
     pub_key: *const core::ffi::c_char,
     code: *mut core::ffi::c_uchar,
 ) -> string::String {
-    fn decrypt<P: AsRef<std::path::Path>>(path: P, _pub_key: &str) -> Result<string::String> {
-        let path = path.as_ref();
+    fn decrypt<P: AsRef<std::path::Path>>(
+        path: P,
+        pub_key: &core::ffi::CStr,
+    ) -> Result<string::String> {
+        let pub_key = pub_key.to_str().map(String::from)?;
+        let mut guard = age::cli_common::StdinGuard::new(true);
+        // TODO: This needs to print to the CLI
+        let identities = age::cli_common::read_identities(vec![pub_key], None, &mut guard)?;
 
-        let mut file = std::fs::File::open(path)?;
-        let mut buffer = std::fs::metadata(path)
-            .ok()
-            .and_then(|m| usize::try_from(m.len()).ok())
-            .map_or_else(Vec::new, Vec::with_capacity);
+        let decryptor = std::fs::File::open(path)
+            .map_err(Into::into)
+            .map(std::io::BufReader::new)
+            .map(age::armor::ArmoredReader::new)
+            .and_then(error::wrap(age::Decryptor::new))?;
 
-        std::io::Read::read_to_end(&mut file, &mut buffer)?;
+        let mut reader = decryptor.decrypt(identities.iter().map(|b| &**b))?;
+        let mut out = String::new();
+        std::io::Read::read_to_string(&mut reader, &mut out)?;
 
-        Ok(buffer.into())
+        Ok(out.into())
     }
 
     unsafe { code.write(0) };
@@ -42,11 +50,7 @@ pub extern "C" fn decrypt(
     );
     let pub_key = unsafe { core::ffi::CStr::from_ptr(pub_key) };
 
-    match pub_key
-        .to_str()
-        .map_err(error::Error::from)
-        .and_then(|pub_key| decrypt(path, pub_key))
-    {
+    match decrypt(path, pub_key) {
         Ok(string) => string,
         Err(err) => {
             unsafe { code.write(err.code()) };

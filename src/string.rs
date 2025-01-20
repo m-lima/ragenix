@@ -37,3 +37,12 @@ impl From<Vec<u8>> for String {
         Self { data, len, cap }
     }
 }
+
+impl std::fmt::Display for String {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let out = core::mem::ManuallyDrop::new(unsafe {
+            std::string::String::from_raw_parts(self.data, self.len, self.cap)
+        });
+        out.fmt(f)
+    }
+}
