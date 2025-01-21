@@ -11,10 +11,19 @@ void dealloc(const RageString &string);
 }
 
 struct RageStringWrapper {
-  const RageString string;
-  RageStringWrapper(const RageString string) : string{string} {}
-  ~RageStringWrapper() { dealloc(string); }
-  inline const char *str() { return string.string; }
+public:
+  RageStringWrapper(const RageString string) : mString{string} {}
+  ~RageStringWrapper() {
+    if (mDestruct) {
+      dealloc(mString);
+    }
+  }
+  inline void leak() { mDestruct = false; }
+  inline const char *str() { return mString.string; }
+
+private:
+  const RageString mString;
+  bool mDestruct = true;
 };
 
 nix::Value getArg(nix::EvalState &state, const nix::PosIdx pos, nix::Value *arg,
@@ -49,8 +58,13 @@ void decryptPrimOp(nix::EvalState &state, const nix::PosIdx pos,
       decrypt(path.payload.path.path, pubKey.payload.path.path, status)};
 
   if (status == 0) {
-    auto expr = state.parseExprFromString(output.str(), path.path());
-    state.eval(expr, out);
+    try {
+      auto expr = state.parseExprFromString(output.str(), path.path());
+      state.eval(expr, out);
+    } catch (nix::UndefinedVarError &) {
+      out.mkString(output.str());
+      output.leak();
+    }
   } else {
     state.error<nix::EvalError>("could not decrypt %1%", path.payload.path.path)
         .withTrace(pos, output.str())
