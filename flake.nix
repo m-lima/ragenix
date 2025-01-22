@@ -7,11 +7,13 @@
 
   outputs =
     {
+      self,
       nixpkgs,
       crane,
       flake-utils,
       ...
     }:
+
     flake-utils.lib.eachDefaultSystem (
       system:
       let
@@ -19,7 +21,7 @@
         inherit (pkgs) lib stdenv;
         craneLib = crane.mkLib pkgs;
         sourceFilter =
-          path: type: (lib.hasSuffix "/include.h" path) || (craneLib.filterCargoSources path type);
+          path: type: (lib.hasSuffix "/ragenix.cc" path) || (craneLib.filterCargoSources path type);
 
         deps = {
           env = {
@@ -123,10 +125,9 @@
       {
         checks = checks;
 
-        packages.default = main.build;
-
-        apps.default = flake-utils.lib.mkApp {
-          drv = main.build;
+        packages = {
+          default = main.build;
+          ragenix = main.build;
         };
 
         devShells.default = craneLib.devShell {
@@ -137,5 +138,37 @@
 
         formatter = pkgs.nixfmt-rfc-style;
       }
-    );
+    )
+    // {
+      nixosModules =
+        let
+          module =
+            {
+              lib,
+              config,
+              pkgs,
+              ...
+            }:
+            {
+              options = {
+                ragenix = {
+                  pubKey = lib.mkOption {
+                    type = lib.types.path;
+                    description = "Path to key for decryption of the secret";
+                    example = /home/user/.ssh/id_ed25519;
+                  };
+                };
+              };
+
+              config = {
+                environment.systemPackages = [ self.packages.${pkgs.system}.ragenix ];
+                nix.settings.plugin-files = [ "${self.packages.${pkgs.system}.ragenix}/lib/libragenix.so" ];
+              };
+            };
+        in
+        {
+          default = module;
+          ragenix = module;
+        };
+    };
 }
