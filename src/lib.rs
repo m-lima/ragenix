@@ -17,18 +17,18 @@ pub extern "C" fn nix_plugin_entry() {
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn decrypt(
+    key: *const core::ffi::c_char,
     path: *const core::ffi::c_char,
-    pub_key: *const core::ffi::c_char,
     code: *mut core::ffi::c_uchar,
 ) -> string::String {
     fn decrypt<P: AsRef<std::path::Path>>(
+        key: &core::ffi::CStr,
         path: P,
-        pub_key: &core::ffi::CStr,
     ) -> Result<string::String> {
-        let pub_key = pub_key.to_str().map(String::from)?;
+        let key = key.to_str().map(String::from)?;
         let mut guard = age::cli_common::StdinGuard::new(true);
         // TODO: This needs to print to the CLI
-        let identities = age::cli_common::read_identities(vec![pub_key], None, &mut guard)?;
+        let identities = age::cli_common::read_identities(vec![key], None, &mut guard)?;
 
         let decryptor = std::fs::File::open(path)
             .map_err(Into::into)
@@ -45,12 +45,12 @@ pub extern "C" fn decrypt(
 
     unsafe { code.write(0) };
 
+    let key = unsafe { core::ffi::CStr::from_ptr(key) };
     let path = <std::ffi::OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(
         unsafe { core::ffi::CStr::from_ptr(path) }.to_bytes(),
     );
-    let pub_key = unsafe { core::ffi::CStr::from_ptr(pub_key) };
 
-    match decrypt(path, pub_key) {
+    match decrypt(key, path) {
         Ok(string) => string,
         Err(err) => {
             unsafe { code.write(err.code()) };
