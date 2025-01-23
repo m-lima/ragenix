@@ -6,7 +6,7 @@ struct RageString {
   const std::size_t len;
   const std::size_t cap;
 };
-RageString decrypt(const char *path, const char *pubKey, uint8_t &status);
+RageString decrypt(const char *path, const char *key, uint8_t &status);
 void dealloc(const RageString &string);
 }
 
@@ -52,10 +52,10 @@ nix::Value getArg(nix::EvalState &state, const nix::PosIdx pos, nix::Value *arg,
 void decryptPrimOp(nix::EvalState &state, const nix::PosIdx pos,
                    nix::Value **args, nix::Value &out) {
   auto path = getArg(state, pos, args[0], nix::nPath);
-  auto pubKey = getArg(state, pos, args[1], nix::nPath);
+  auto key = getArg(state, pos, args[1], nix::nPath);
   auto status = uint8_t{0};
   auto output = RageStringWrapper{
-      decrypt(path.payload.path.path, pubKey.payload.path.path, status)};
+      decrypt(path.payload.path.path, key.payload.path.path, status)};
 
   if (status == 0) {
     try {
@@ -76,7 +76,7 @@ void decryptPrimOp(nix::EvalState &state, const nix::PosIdx pos,
 extern "C" void cpp_entry() {
   nix::RegisterPrimOp primop({
       .name = "__decrypt",
-      .args = {"path", "pubkey"},
+      .args = {"path", "key"},
       .arity = 2,
       .doc = "Decrypt an evaluate a file",
       .fun = decryptPrimOp,

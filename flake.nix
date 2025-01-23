@@ -152,7 +152,7 @@
             {
               options = {
                 ragenix = {
-                  pubKey = lib.mkOption {
+                  key = lib.mkOption {
                     type = lib.types.path;
                     description = "Path to key for decryption of the secret";
                     example = /home/user/.ssh/id_ed25519;

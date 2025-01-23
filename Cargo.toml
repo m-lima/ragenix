@@ -1,14 +1,10 @@
 [package]
 name = "ragenix"
-version = "0.1.0"
+version = "0.1.1"
 description = "A evaluation time decryptor plugin for Nix"
 edition = "2021"
 license = "MIT"
 readme = "README.md"
-
-[[bin]]
-name = "ragenix"
-path = "src/main.rs"
 
 [lib]
 crate-type = [ "cdylib", "lib" ]
