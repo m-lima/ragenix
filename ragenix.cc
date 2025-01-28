@@ -10,16 +10,6 @@ RageString decrypt(const char *key, const char *path, uint8_t &status);
 void dealloc(const RageString &string);
 }
 
-struct RageStringWrapper {
-public:
-  RageStringWrapper(const RageString string) : mString{string} {}
-  ~RageStringWrapper() { dealloc(mString); }
-  inline const char *str() { return mString.string; }
-
-private:
-  const RageString mString;
-};
-
 nix::Value getArg(nix::EvalState &state, const nix::PosIdx pos, nix::Value *arg,
                   const nix::ValueType type) {
   if (arg == NULL) {
@@ -43,24 +33,30 @@ nix::Value getArg(nix::EvalState &state, const nix::PosIdx pos, nix::Value *arg,
   return value;
 }
 
+std::string mkString(RageString rageString) {
+  std::string out(rageString.string, rageString.len);
+  dealloc(rageString);
+  return out;
+}
+
 void decryptPrimOp(nix::EvalState &state, const nix::PosIdx pos,
                    nix::Value **args, nix::Value &out) {
   auto key = getArg(state, pos, args[0], nix::nPath);
   auto path = getArg(state, pos, args[1], nix::nPath);
   auto status = uint8_t{0};
-  auto output = decrypt(key.payload.path.path, path.payload.path.path, status);
+  auto decrypted =
+      mkString(decrypt(key.payload.path.path, path.payload.path.path, status));
 
   if (status == 0) {
     try {
-      auto rageString = RageStringWrapper{output};
-      auto expr = state.parseExprFromString(rageString.str(), path.path());
+      auto expr = state.parseExprFromString(decrypted, path.path());
       state.eval(expr, out);
     } catch (nix::UndefinedVarError &) {
-      out.mkString(output.string);
+      out.mkString(decrypted);
     }
   } else {
     state.error<nix::EvalError>("could not decrypt %1%", path.payload.path.path)
-        .withTrace(pos, output.string)
+        .withTrace(pos, decrypted)
         .atPos(pos)
         .debugThrow();
   }

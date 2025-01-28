@@ -1,6 +1,6 @@
 [package]
 name = "ragenix"
-version = "0.1.2"
+version = "0.1.3"
 description = "A evaluation time decryptor plugin for Nix"
 edition = "2021"
 license = "MIT"
