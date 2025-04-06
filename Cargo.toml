@@ -2,7 +2,7 @@
 name = "ragenix"
 version = "0.1.4"
 description = "A evaluation time decryptor plugin for Nix"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 readme = "README.md"
 
