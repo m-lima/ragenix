@@ -57,7 +57,7 @@
 
               config = {
                 environment.systemPackages = [ self.packages.${pkgs.system}.ragenix ];
-                nix.settings.plugin-files = [ "${self.packages.${pkgs.system}.ragenix}/lib/libragenix.so" ];
+                nix.settings.plugin-files = builtins.attrNames (builtins.readDir "${self.packages.${pkgs.system}.ragenix}/lib");
               };
             };
         in
