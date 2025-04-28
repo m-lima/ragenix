@@ -5,17 +5,17 @@ mod string;
 
 type Result<T = ()> = core::result::Result<T, error::Error>;
 
-extern "C" {
+unsafe extern "C" {
     fn cpp_entry();
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn nix_plugin_entry() {
     unsafe { cpp_entry() }
 }
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn decrypt(
     key: *const core::ffi::c_char,
     path: *const core::ffi::c_char,
@@ -59,7 +59,7 @@ pub extern "C" fn decrypt(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn dealloc(string: string::String) {
     string.dealloc();
 }
