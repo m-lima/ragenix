@@ -61,7 +61,9 @@
                 in
                 {
                   environment.systemPackages = [ ragenix ];
-                  nix.settings.plugin-files = builtins.attrNames (builtins.readDir "${ragenix}/lib");
+                  nix.settings.plugin-files = map (lib: "${ragenix}/lib/${lib}") (
+                    builtins.attrNames (builtins.readDir "${ragenix}/lib")
+                  );
                 };
             };
         in
