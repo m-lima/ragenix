@@ -55,10 +55,14 @@
                 };
               };
 
-              config = {
-                environment.systemPackages = [ self.packages.${pkgs.system}.ragenix ];
-                nix.settings.plugin-files = builtins.attrNames (builtins.readDir "${self.packages.${pkgs.system}.ragenix}/lib");
-              };
+              config =
+                let
+                  ragenix = self.packages.${pkgs.system}.default;
+                in
+                {
+                  environment.systemPackages = [ ragenix ];
+                  nix.settings.plugin-files = builtins.attrNames (builtins.readDir "${ragenix}/lib");
+                };
             };
         in
         {
