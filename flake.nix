@@ -1,6 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixref.url = "github:NixOS/nixpkgs/nixos-24.11";
     crane.url = "github:ipetkov/crane";
     flake-utils.url = "github:numtide/flake-utils";
     treefmt-nix = {
@@ -15,6 +16,7 @@
   outputs =
     {
       self,
+      nixref,
       rust-helper,
       ...
     }@inputs:
@@ -28,11 +30,10 @@
           pkg-config
           rustPlatform.bindgenHook
         ];
-      buildInputs =
-        pkgs: with pkgs; [
-          nix
-          boost
-        ];
+      buildInputs = pkgs: [
+        nixref.legacyPackages.${pkgs.system}.nix
+        pkgs.boost
+      ];
     } ./. "ragenix")
     // {
       nixosModules =
@@ -61,9 +62,7 @@
                 in
                 {
                   environment.systemPackages = [ ragenix ];
-                  nix.settings.plugin-files = map (lib: "${ragenix}/lib/${lib}") (
-                    builtins.attrNames (builtins.readDir "${ragenix}/lib")
-                  );
+                  nix.settings.plugin-files = [ "${ragenix}/lib" ];
                 };
             };
         in
