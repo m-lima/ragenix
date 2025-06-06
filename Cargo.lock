@@ -197,9 +197,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.18"
+version = "1.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "525046617d8376e3db1deffb079e91cef90a89fc3ca5c185bbf8c9ecdd15cd5c"
+checksum = "956a5e21988b87f372569b66183b78babf23ebc2e744b733e4350a752c4dafac"
 dependencies = [
  "shlex",
 ]
@@ -1049,7 +1049,7 @@ dependencies = [
 
 [[package]]
 name = "ragenix"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "age",
  "cc",

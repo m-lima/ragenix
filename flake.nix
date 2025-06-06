@@ -1,8 +1,14 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    nixref.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixref.url = "github:NixOS/nixpkgs/nixos-25.05";
     crane.url = "github:ipetkov/crane";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+      };
+    };
     flake-utils.url = "github:numtide/flake-utils";
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
@@ -10,17 +16,17 @@
         nixpkgs.follows = "nixpkgs";
       };
     };
-    rust-helper.url = "github:m-lima/nix-template";
+    helper.url = "github:m-lima/nix-template";
   };
 
   outputs =
     {
       self,
       nixref,
-      rust-helper,
+      helper,
       ...
     }@inputs:
-    (rust-helper.lib.rust.helper inputs {
+    (helper.lib.rust.helper inputs {
       allowFilesets = [ ./ragenix.cc ];
       lockRandomSeed = true;
       binary = false;

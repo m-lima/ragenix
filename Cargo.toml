@@ -1,6 +1,6 @@
 [package]
 name = "ragenix"
-version = "0.1.6"
+version = "0.1.7"
 description = "A evaluation time decryptor plugin for Nix"
 edition = "2024"
 license = "MIT"
@@ -15,7 +15,7 @@ strip = true
 lto = true
 
 [build-dependencies]
-cc = "1.2.18"
+cc = "1.2.26"
 pkg-config = "0.3.32"
 
 [dependencies]
@@ -25,4 +25,4 @@ age = { version = "0.11.1", features = [
   "plugin",
   "ssh",
 ] }
-cc = "1.2.18"
+cc = "1.2.26"

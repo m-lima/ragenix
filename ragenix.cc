@@ -1,4 +1,4 @@
-#include <primops.hh>
+#include <nix/expr/primops.hh>
 
 extern "C" {
 struct RageString {
