@@ -26,40 +26,51 @@ nix::Value getArg(nix::EvalState &state, const nix::PosIdx pos, nix::Value *arg,
     state
         .error<nix::TypeError>("value is %1% while %2% was expected",
                                nix::showType(value), nix::showType(type))
-        .atPos(pos)
+        .atPos(arg->determinePos(pos))
         .debugThrow();
   }
 
   return value;
 }
 
-std::string mkString(RageString rageString) {
-  std::string out(rageString.string, rageString.len);
-  dealloc(rageString);
-  return out;
-}
-
 void decryptPrimOp(nix::EvalState &state, const nix::PosIdx pos,
                    nix::Value **args, nix::Value &out) {
+  auto output = state.buildBindings(1);
   auto key = getArg(state, pos, args[0], nix::nPath);
   auto path = getArg(state, pos, args[1], nix::nPath);
   auto status = uint8_t{0};
   auto decrypted =
-      mkString(decrypt(key.payload.path.path, path.payload.path.path, status));
+      decrypt(key.payload.path.path, path.payload.path.path, status);
+  auto payload = std::string(decrypted.string, decrypted.len);
 
   if (status == 0) {
     try {
-      auto expr = state.parseExprFromString(decrypted, path.path());
-      state.eval(expr, out);
+      auto expr = state.parseExprFromString(payload, path.path());
+      auto ok = state.allocValue();
+      state.eval(expr, *ok);
+      output.insert(state.symbols.create("ok"), ok);
     } catch (nix::UndefinedVarError &) {
-      out.mkString(decrypted);
+      output.alloc("ok").mkString(payload);
+    } catch (const std::exception &e) {
+      output.alloc("err").mkString(e.what());
     }
   } else {
-    state.error<nix::EvalError>("could not decrypt %1%", path.payload.path.path)
-        .withTrace(pos, decrypted)
-        .atPos(pos)
-        .debugThrow();
+    auto result = std::string();
+    auto strFront = std::string_view{"could not decrypt "};
+    auto strPath = std::string_view{path.payload.path.path};
+    auto strColon = std::string_view{": "};
+
+    result.reserve(strFront.length() + strPath.length() + strPath.length() +
+                   strColon.length() + payload.length());
+
+    result.append(strFront);
+    result.append(strPath);
+    result.append(strColon);
+    result.append(payload);
+
+    output.alloc("err").mkString(result);
   }
+  out.mkAttrs(output.finish());
 }
 
 extern "C" void cpp_entry() {

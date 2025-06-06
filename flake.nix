@@ -1,7 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    nixref.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     crane.url = "github:ipetkov/crane";
     fenix = {
       url = "github:nix-community/fenix";
@@ -22,7 +21,6 @@
   outputs =
     {
       self,
-      nixref,
       helper,
       ...
     }@inputs:
@@ -37,7 +35,7 @@
           rustPlatform.bindgenHook
         ];
       buildInputs = pkgs: [
-        nixref.legacyPackages.${pkgs.system}.nix
+        pkgs.nix
         pkgs.boost
       ];
     } ./. "ragenix")
