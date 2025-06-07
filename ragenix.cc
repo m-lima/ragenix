@@ -7,7 +7,7 @@ struct RageString {
   const std::size_t cap;
 };
 RageString decrypt(const char *key, const char *path, uint8_t &status);
-void dealloc(const RageString &string);
+void dealloc(RageString &string);
 }
 
 nix::Value getArg(nix::EvalState &state, const nix::PosIdx pos, nix::Value *arg,
