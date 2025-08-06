@@ -21,24 +21,29 @@
   outputs =
     {
       self,
+      flake-utils,
       helper,
       ...
     }@inputs:
-    (helper.lib.rust.helper inputs {
-      allowFilesets = [ ./ragenix.cc ];
-      lockRandomSeed = true;
-      binary = false;
-      fmts = [ "clang-format" ];
-      nativeBuildInputs =
-        pkgs: with pkgs; [
-          pkg-config
-          rustPlatform.bindgenHook
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      (helper.lib.rust.helper inputs system ./. {
+        allowFilesets = [ ./ragenix.cc ];
+        lockRandomSeed = true;
+        binary = false;
+        nativeBuildInputs = pkgs: [
+          pkgs.pkg-config
+          pkgs.rustPlatform.bindgenHook
         ];
-      buildInputs = pkgs: [
-        pkgs.nix
-        pkgs.boost
-      ];
-    } ./. "ragenix")
+        buildInputs = pkgs: [
+          pkgs.nix
+          pkgs.boost
+        ];
+        formatters = {
+          clang-format.enable = true;
+        };
+      }).outputs
+    )
     // {
       nixosModules =
         let
