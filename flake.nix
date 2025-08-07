@@ -65,14 +65,9 @@
                 };
               };
 
-              config =
-                let
-                  ragenix = self.packages.${pkgs.system}.default;
-                in
-                {
-                  environment.systemPackages = [ ragenix ];
-                  nix.settings.plugin-files = [ "${ragenix}/lib" ];
-                };
+              config = {
+                nix.settings.plugin-files = [ "${self.packages.${pkgs.system}.default}/lib" ];
+              };
             };
         in
         {
