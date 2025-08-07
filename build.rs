@@ -8,13 +8,13 @@ impl AddPkg for cc::Build {
             self.flag("-isystem").flag(p.to_str().unwrap());
         }
         for p in pkg.link_paths {
-            self.flag(format!("-L{p:?}"));
+            self.flag(format!("-L{}", p.display()));
         }
         for p in pkg.libs {
             self.flag(format!("-l{p}"));
         }
         for p in pkg.framework_paths {
-            self.flag(format!("-F{p:?}"));
+            self.flag(format!("-F{}", p.display()));
         }
         for p in pkg.frameworks {
             self.flag(format!("-framework {p}"));
@@ -25,27 +25,21 @@ impl AddPkg for cc::Build {
 
 impl AddPkg for String {
     fn add_pkg_config(&mut self, pkg: pkg_config::Library) -> &mut Self {
+        use std::fmt::Write;
         for p in pkg.include_paths {
-            self.push(' ');
-            self.push_str("-isystem");
-            self.push(' ');
-            self.push_str(p.to_str().unwrap());
+            std::write!(self, " -isystem {}", p.to_str().unwrap()).unwrap();
         }
         for p in pkg.link_paths {
-            self.push(' ');
-            self.push_str(&format!("-L{p:?}"));
+            write!(self, " -L{}", p.display()).unwrap();
         }
         for p in pkg.libs {
-            self.push(' ');
-            self.push_str(&format!("-l{p}"));
+            write!(self, " -l{p}").unwrap();
         }
         for p in pkg.framework_paths {
-            self.push(' ');
-            self.push_str(&format!("-F{p:?}"));
+            write!(self, " -F{}", p.display()).unwrap();
         }
         for p in pkg.frameworks {
-            self.push(' ');
-            self.push_str(&format!("-framework {p}"));
+            write!(self, " -framework {p}").unwrap();
         }
         self
     }
