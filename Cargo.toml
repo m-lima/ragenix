@@ -15,7 +15,7 @@ strip = true
 lto = true
 
 [build-dependencies]
-cc = "1.2.26"
+cc = "1.2.40"
 pkg-config = "0.3.32"
 
 [dependencies]
@@ -25,4 +25,4 @@ age = { version = "0.11.1", features = [
   "plugin",
   "ssh",
 ] }
-cc = "1.2.26"
+cc = "1.2.40"
