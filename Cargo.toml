@@ -19,10 +19,10 @@ cc = "1.2.40"
 pkg-config = "0.3.32"
 
 [dependencies]
-age = { version = "0.11.1", features = [
+age = { version = "0.11.2", features = [
   "armor",
   "cli-common",
   "plugin",
   "ssh",
 ] }
-cc = "1.2.40"
+cc = "1.2.51"

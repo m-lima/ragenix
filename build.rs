@@ -23,28 +23,6 @@ impl AddPkg for cc::Build {
     }
 }
 
-impl AddPkg for String {
-    fn add_pkg_config(&mut self, pkg: pkg_config::Library) -> &mut Self {
-        use std::fmt::Write;
-        for p in pkg.include_paths {
-            std::write!(self, " -isystem {}", p.to_str().unwrap()).unwrap();
-        }
-        for p in pkg.link_paths {
-            write!(self, " -L{}", p.display()).unwrap();
-        }
-        for p in pkg.libs {
-            write!(self, " -l{p}").unwrap();
-        }
-        for p in pkg.framework_paths {
-            write!(self, " -F{}", p.display()).unwrap();
-        }
-        for p in pkg.frameworks {
-            write!(self, " -framework {p}").unwrap();
-        }
-        self
-    }
-}
-
 fn main() {
     let nix_expr = pkg_config::Config::new().probe("nix-expr").unwrap();
 
@@ -54,7 +32,6 @@ fn main() {
             .file("ragenix.cc")
             .cpp(true)
             .add_pkg_config(nix_expr)
-            .shared_flag(true)
             .std("c++20"),
     );
 }
