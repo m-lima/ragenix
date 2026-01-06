@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     crane.url = "github:ipetkov/crane";
     fenix = {
       url = "github:nix-community/fenix";
@@ -67,7 +67,7 @@
               };
 
               config = {
-                nix.settings.plugin-files = [ "${self.packages.${pkgs.system}.default}/lib" ];
+                nix.settings.plugin-files = [ "${self.packages.${pkgs.stdenv.hostPlatform.system}.default}/lib" ];
               };
             };
         in

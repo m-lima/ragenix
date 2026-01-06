@@ -32,7 +32,7 @@ fn main() {
             .file("ragenix.cc")
             .cpp(true)
             .add_pkg_config(nix_expr)
-            .std("c++20"),
+            .std("c++23"),
     );
 }
 

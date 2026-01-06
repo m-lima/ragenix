@@ -39,8 +39,7 @@ void decryptPrimOp(nix::EvalState &state, const nix::PosIdx pos,
   auto key = getArg(state, pos, args[0], nix::nPath);
   auto path = getArg(state, pos, args[1], nix::nPath);
   auto status = uint8_t{0};
-  auto decrypted =
-      decrypt(key.payload.path.path, path.payload.path.path, status);
+  auto decrypted = decrypt(key.pathStr(), path.pathStr(), status);
   auto payload = std::string(decrypted.string, decrypted.len);
 
   if (status == 0) {
@@ -57,11 +56,11 @@ void decryptPrimOp(nix::EvalState &state, const nix::PosIdx pos,
   } else {
     auto result = std::string();
     auto strFront = std::string_view{"could not decrypt "};
-    auto strPath = std::string_view{path.payload.path.path};
+    auto strPath = std::string_view{path.pathStr()};
     auto strColon = std::string_view{": "};
 
-    result.reserve(strFront.length() + strPath.length() + strPath.length() +
-                   strColon.length() + payload.length());
+    result.reserve(strFront.length() + strPath.length() + strColon.length() +
+                   payload.length());
 
     result.append(strFront);
     result.append(strPath);
