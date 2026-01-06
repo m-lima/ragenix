@@ -30,6 +30,7 @@
       (helper.lib.rust.helper inputs system ./. {
         allowFilesets = [ ./ragenix.cc ];
         lockRandomSeed = true;
+        systemLinker = true;
         binary = false;
         nativeBuildInputs = pkgs: [
           pkgs.pkg-config
