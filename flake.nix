@@ -21,16 +21,20 @@
   outputs =
     {
       self,
+      nixpkgs,
       flake-utils,
       helper,
       ...
     }@inputs:
     flake-utils.lib.eachDefaultSystem (
       system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+      in
       (helper.lib.rust.helper inputs system ./. {
         allowFilesets = [ ./ragenix.cc ];
         lockRandomSeed = true;
-        systemLinker = true;
+        systemLinker = pkgs.stdenv.isLinux;
         binary = false;
         nativeBuildInputs = pkgs: [
           pkgs.pkg-config
