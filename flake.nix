@@ -28,13 +28,10 @@
     }@inputs:
     flake-utils.lib.eachDefaultSystem (
       system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-      in
       (helper.lib.rust.helper inputs system ./. {
         allowFilesets = [ ./ragenix.cc ];
         lockRandomSeed = true;
-        systemLinker = pkgs.stdenv.isLinux;
+        systemLinker = true;
         binary = false;
         nativeBuildInputs = pkgs: [
           pkgs.pkg-config
