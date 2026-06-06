@@ -29,7 +29,6 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       (helper.lib.rust.helper inputs system ./. {
-        allowFilesets = [ ./ragenix.cc ];
         lockRandomSeed = true;
         systemLinker = true;
         binary = false;
@@ -39,7 +38,6 @@
         ];
         buildInputs = pkgs: [
           pkgs.nix
-          pkgs.boost
         ];
         formatters = {
           clang-format.enable = true;

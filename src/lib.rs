@@ -1,6 +1,7 @@
 #![deny(warnings, clippy::pedantic)]
 
 mod error;
+mod nix_ffi;
 mod string;
 
 type Result<T = ()> = core::result::Result<T, error::Error>;

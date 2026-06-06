@@ -1,82 +1,33 @@
-trait AddPkg {
-    fn add_pkg_config(&mut self, pkg: pkg_config::Library) -> &mut Self;
-}
-
-impl AddPkg for cc::Build {
-    fn add_pkg_config(&mut self, pkg: pkg_config::Library) -> &mut Self {
-        for p in pkg.include_paths {
-            self.flag("-isystem").flag(p.to_str().unwrap());
-        }
-        for p in pkg.link_paths {
-            self.flag(format!("-L{}", p.display()));
-        }
-        for p in pkg.libs {
-            self.flag(format!("-l{p}"));
-        }
-        for p in pkg.framework_paths {
-            self.flag(format!("-F{}", p.display()));
-        }
-        for p in pkg.frameworks {
-            self.flag(format!("-framework {p}"));
-        }
-        self
-    }
-}
-
 fn main() {
-    let nix_expr = pkg_config::Config::new().probe("nix-expr").unwrap();
+    let nix_expr_c = pkg_config::Config::new().probe("nix-expr-c").unwrap();
 
-    println!("cargo::rerun-if-changed=ragenix.cc");
-    generate_outputs(
-        cc::Build::new()
-            .file("ragenix.cc")
-            .cpp(true)
-            .add_pkg_config(nix_expr)
-            .std("c++23"),
-    );
-}
+    println!("cargo::rerun-if-changed=wrapper.h");
 
-fn generate_outputs(builder: &cc::Build) {
-    use std::io::Write;
+    let mut builder = bindgen::Builder::default()
+        .header("wrapper.h")
+        .allowlist_function("nix_.*")
+        .allowlist_type("nix_.*")
+        .allowlist_type("NIX_.*")
+        .allowlist_type("ValueType")
+        .allowlist_type("EvalState")
+        .allowlist_type("PrimOp")
+        .allowlist_type("PrimOpFun")
+        .allowlist_type("BindingsBuilder")
+        .allowlist_type("ListBuilder")
+        .allowlist_var("NIX_.*")
+        .default_enum_style(bindgen::EnumVariation::Rust {
+            non_exhaustive: false,
+        })
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
 
-    builder.compile("ragenix");
-    let command = builder.get_compiler().to_command();
-
-    let mut file = std::fs::File::options()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open("compile_commands.json")
-        .unwrap();
-
-    file.write_all(
-        concat!(
-            r#"[{"directory":""#,
-            env!("CARGO_MANIFEST_DIR"),
-            r#"","file":""#,
-            env!("CARGO_MANIFEST_DIR"),
-            r#"/ragenix.cc","command":""#
-        )
-        .as_bytes(),
-    )
-    .unwrap();
-
-    file.write_all(command.get_program().as_encoded_bytes())
-        .unwrap();
-    for arg in command.get_args() {
-        file.write_all(b" ").unwrap();
-
-        let bytes = arg.as_encoded_bytes();
-        let mut chunks = bytes.split(|b| *b == b'"');
-        let Some(first) = chunks.next() else {
-            continue;
-        };
-
-        file.write_all(first).unwrap();
-        for rest in chunks {
-            file.write_all(b"\\\"").unwrap();
-            file.write_all(rest).unwrap();
-        }
+    for path in &nix_expr_c.include_paths {
+        builder = builder.clang_arg(format!("-I{}", path.display()));
     }
-    file.write_all(br#""}]"#).unwrap();
+
+    let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    builder
+        .generate()
+        .expect("generate nix C API bindings")
+        .write_to_file(out.join("nix_ffi.rs"))
+        .expect("write nix_ffi.rs");
 }
