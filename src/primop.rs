@@ -1,4 +1,4 @@
-use crate::{error, nix};
+use crate::nix;
 
 macro_rules! bail {
     ($err: expr, $msg: literal) => {
@@ -7,7 +7,7 @@ macro_rules! bail {
         } else {
             $err
         };
-        return Err((err, std::borrow::Cow::Borrowed($msg)));
+        return Err(NixError::new(err, std::borrow::Cow::Borrowed($msg)));
     };
 
     ($msg: literal) => {
@@ -21,9 +21,9 @@ macro_rules! bail {
             $err
         };
         if let Some(msg) = extract_error_with_prefix($ctx, $msg) {
-            return Err((err, std::borrow::Cow::Owned(msg)));
+            return Err(NixError::new(err, std::borrow::Cow::Owned(msg)));
         }
-        return Err((
+        return Err(NixError::new(
             err,
             std::borrow::Cow::Borrowed(unsafe {
                 std::ffi::CStr::from_bytes_with_nul_unchecked(concat!($msg, '\0').as_bytes())
@@ -37,8 +37,31 @@ macro_rules! bail {
     };
 }
 
-type Result<T = ()> =
-    std::result::Result<T, (nix::nix_err, std::borrow::Cow<'static, std::ffi::CStr>)>;
+struct NixError {
+    code: nix::nix_err,
+    msg: std::borrow::Cow<'static, std::ffi::CStr>,
+}
+
+impl NixError {
+    fn new(code: nix::nix_err, msg: std::borrow::Cow<'static, std::ffi::CStr>) -> Self {
+        Self { code, msg }
+    }
+
+    fn convert(err: &crate::error::Error, path: &std::ffi::CStr) -> Self {
+        match std::ffi::CString::new(format!(
+            "could not decrypt {path}: {err}",
+            path = path.to_str().unwrap_or("<invalid path>")
+        )) {
+            Ok(msg) => NixError::new(nix::nix_err::NIX_ERR_UNKNOWN, std::borrow::Cow::Owned(msg)),
+            Err(_) => NixError::new(
+                nix::nix_err::NIX_ERR_UNKNOWN,
+                std::borrow::Cow::Borrowed(c"error payload contains interior NUL"),
+            ),
+        }
+    }
+}
+
+type Result<T = ()> = std::result::Result<T, NixError>;
 
 pub fn register() {
     let ctx = unsafe { nix::nix_c_context_create() };
@@ -168,18 +191,34 @@ unsafe extern "C" fn decrypt_primop(
             bail!(ctx => "failed to allocate bindings builder");
         }
 
-        match super::decrypt(key, file_path) {
-            Ok(payload) => insert_ok(ctx, state, builder, path, &payload)?,
-            Err(err) => insert_err(ctx, state, builder, path, &err)?,
+        let value = unsafe { nix::nix_alloc_value(ctx, state) };
+        if value.is_null() {
+            bail!(ctx => "failed to allocate value");
         }
 
+        let field = match super::decrypt(key, file_path)
+            .map_err(|err| NixError::convert(&err, path))
+            .and_then(|payload| insert_ok(ctx, state, value, path, &payload))
+        {
+            Ok(()) => c"ok",
+            Err(err) => {
+                insert_err(ctx, value, &err)?;
+                c"err"
+            }
+        };
+
+        let result =
+            unsafe { nix::nix_bindings_builder_insert(ctx, builder, field.as_ptr(), value) };
+        if result != nix::nix_err::NIX_OK {
+            bail!(ctx => result, "failed to insert value into return attribute set");
+        }
         finish_attrs(ctx, ret, builder)?;
         Ok(())
     }
 
     if let Err(err) = inner(ctx, state, args, ret) {
         unsafe {
-            nix::nix_set_err_msg(ctx, err.0, err.1.as_ptr());
+            nix::nix_set_err_msg(ctx, err.code, err.msg.as_ptr());
         }
     }
 }
@@ -187,18 +226,13 @@ unsafe extern "C" fn decrypt_primop(
 fn insert_ok(
     ctx: *mut nix::nix_c_context,
     state: *mut nix::EvalState,
-    builder: *mut nix::BindingsBuilder,
+    value: *mut nix::nix_value,
     path: &std::ffi::CStr,
     payload: &str,
 ) -> Result {
     let Ok(payload) = std::ffi::CString::new(payload) else {
         bail!(c"decrypted payload contains interior NUL");
     };
-
-    let value = unsafe { nix::nix_alloc_value(ctx, state) };
-    if value.is_null() {
-        bail!(ctx => "failed to allocate `ok` value");
-    }
 
     let result = unsafe {
         nix::nix_expr_eval_from_string(ctx, state, payload.as_ptr(), path.as_ptr(), value)
@@ -207,41 +241,15 @@ fn insert_ok(
         bail!(ctx => result, "could not evaluate decrypted payload");
     }
 
-    let result = unsafe { nix::nix_bindings_builder_insert(ctx, builder, c"ok".as_ptr(), value) };
-    if result != nix::nix_err::NIX_OK {
-        bail!(ctx => result, "failed to insert `ok` binding");
-    }
     Ok(())
 }
 
-fn insert_err(
-    ctx: *mut nix::nix_c_context,
-    state: *mut nix::EvalState,
-    builder: *mut nix::BindingsBuilder,
-    path: &std::ffi::CStr,
-    err: &error::Error,
-) -> Result {
-    let Ok(err_text) = std::ffi::CString::new(format!(
-        "could not decrypt {path}: {err}",
-        path = path.to_str().unwrap_or("<invalid path>")
-    )) else {
-        bail!(c"decrypted payload contains interior NUL");
-    };
-
-    let value = unsafe { nix::nix_alloc_value(ctx, state) };
-    if value.is_null() {
-        bail!(ctx => "failed to allocate `err` value");
-    }
-
-    let result = unsafe { nix::nix_init_string(ctx, value, err_text.as_ptr()) };
+fn insert_err(ctx: *mut nix::nix_c_context, value: *mut nix::nix_value, err: &NixError) -> Result {
+    let result = unsafe { nix::nix_init_string(ctx, value, err.msg.as_ptr()) };
     if result != nix::nix_err::NIX_OK {
         bail!(ctx => result, "failed to initialize string value");
     }
 
-    let result = unsafe { nix::nix_bindings_builder_insert(ctx, builder, c"err".as_ptr(), value) };
-    if result != nix::nix_err::NIX_OK {
-        bail!(ctx => result, "failed to insert `err` binding");
-    }
     Ok(())
 }
 
