@@ -6,21 +6,6 @@ pub enum Error {
     Age(age::DecryptError),
 }
 
-impl Error {
-    pub fn code(&self) -> u8 {
-        match self {
-            Error::StringConversion(_) => 1,
-            Error::IO(_) => 2,
-            Error::Identity(_) => 3,
-            Error::Age(_) => 4,
-        }
-    }
-
-    pub fn message(&self) -> crate::string::String {
-        self.to_string().into()
-    }
-}
-
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {

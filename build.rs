@@ -24,10 +24,21 @@ fn main() {
         builder = builder.clang_arg(format!("-I{}", path.display()));
     }
 
-    let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let out = std::path::PathBuf::from(
+        std::env::var("OUT_DIR").expect("Could not find OUT_DIR during build time"),
+    );
     builder
         .generate()
-        .expect("generate nix C API bindings")
-        .write_to_file(out.join("nix_ffi.rs"))
-        .expect("write nix_ffi.rs");
+        .expect("Could not generate nix C API bindings")
+        .write_to_file(out.join("nix.rs"))
+        .expect("Could not write nix.rs");
+
+    // match std::env::var("CARGO_CFG_TARGET_OS").as_deref() {
+    //     Ok("macos") => {
+    //         println!("cargo:rustc-link-arg=-undefined");
+    //         println!("cargo:rustc-link-arg=dynamic_lookup");
+    //     }
+    //     Ok("linux") => println!("cargo:rustc-link-arg=-Wl,--unresolved-symbols=ignore-all"),
+    //     _ => {}
+    // }
 }
