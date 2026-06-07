@@ -169,6 +169,70 @@ fn get_path<'a>(
     Ok(unsafe { std::ffi::CStr::from_ptr(path) })
 }
 
+struct AttrBuilder {
+    ctx: *mut nix::nix_c_context,
+    ret: *mut nix::nix_value,
+    builder: *mut nix::BindingsBuilder,
+    value: *mut nix::nix_value,
+}
+
+impl AttrBuilder {
+    fn new(
+        ctx: *mut nix::nix_c_context,
+        state: *mut nix::EvalState,
+        ret: *mut nix::nix_value,
+    ) -> Result<Self> {
+        let builder = unsafe { nix::nix_make_bindings_builder(ctx, state, 1) };
+        if builder.is_null() {
+            bail!(ctx => "failed to allocate bindings builder");
+        }
+
+        let value = unsafe { nix::nix_alloc_value(ctx, state) };
+        if value.is_null() {
+            bail!(ctx => "failed to allocate value");
+        }
+
+        Ok(Self {
+            ctx,
+            ret,
+            builder,
+            value,
+        })
+    }
+
+    fn attach(&mut self, ok: bool) -> Result {
+        let field = if ok { c"ok" } else { c"err" };
+
+        let result = unsafe {
+            nix::nix_bindings_builder_insert(self.ctx, self.builder, field.as_ptr(), self.value)
+        };
+
+        if result != nix::nix_err::NIX_OK {
+            bail!(self.ctx => result, "failed to insert value into return attribute set");
+        }
+
+        let result = unsafe { nix::nix_make_attrs(self.ctx, self.ret, self.builder) };
+        if result != nix::nix_err::NIX_OK {
+            unsafe {
+                nix::nix_set_err_msg(self.ctx, result, c"failed to build attribute set".as_ptr());
+            }
+        }
+
+        self.value = std::ptr::null_mut();
+        Ok(())
+    }
+}
+
+impl Drop for AttrBuilder {
+    fn drop(&mut self) {
+        if !self.value.is_null() {
+            unsafe { nix::nix_value_decref(self.ctx, self.value) };
+        }
+
+        unsafe { nix::nix_bindings_builder_free(self.builder) };
+    }
+}
+
 unsafe extern "C" fn decrypt_primop(
     _user_data: *mut std::ffi::c_void,
     ctx: *mut nix::nix_c_context,
@@ -186,34 +250,20 @@ unsafe extern "C" fn decrypt_primop(
         let path = unsafe { get_path(ctx, state, *args.add(1))? };
         let file_path =
             <std::ffi::OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(path.to_bytes());
-        let builder = unsafe { nix::nix_make_bindings_builder(ctx, state, 1) };
-        if builder.is_null() {
-            bail!(ctx => "failed to allocate bindings builder");
-        }
+        let mut builder = AttrBuilder::new(ctx, state, ret)?;
 
-        let value = unsafe { nix::nix_alloc_value(ctx, state) };
-        if value.is_null() {
-            bail!(ctx => "failed to allocate value");
-        }
-
-        let field = match super::decrypt(key, file_path)
+        let result = match super::decrypt(key, file_path)
             .map_err(|err| NixError::convert(&err, path))
-            .and_then(|payload| insert_ok(ctx, state, value, path, &payload))
+            .and_then(|payload| insert_ok(ctx, state, builder.value, path, &payload))
         {
-            Ok(()) => c"ok",
+            Ok(()) => true,
             Err(err) => {
-                insert_err(ctx, value, &err)?;
-                c"err"
+                insert_err(ctx, builder.value, &err)?;
+                false
             }
         };
 
-        let result =
-            unsafe { nix::nix_bindings_builder_insert(ctx, builder, field.as_ptr(), value) };
-        if result != nix::nix_err::NIX_OK {
-            bail!(ctx => result, "failed to insert value into return attribute set");
-        }
-        finish_attrs(ctx, ret, builder)?;
-        Ok(())
+        builder.attach(result)
     }
 
     if let Err(err) = inner(ctx, state, args, ret) {
@@ -250,18 +300,5 @@ fn insert_err(ctx: *mut nix::nix_c_context, value: *mut nix::nix_value, err: &Ni
         bail!(ctx => result, "failed to initialize string value");
     }
 
-    Ok(())
-}
-
-fn finish_attrs(
-    ctx: *mut nix::nix_c_context,
-    ret: *mut nix::nix_value,
-    builder: *mut nix::BindingsBuilder,
-) -> Result {
-    let result = unsafe { nix::nix_make_attrs(ctx, ret, builder) };
-    if result != nix::nix_err::NIX_OK {
-        bail!(ctx => result, "failed to build attribute set");
-    }
-    unsafe { nix::nix_bindings_builder_free(builder) };
     Ok(())
 }
