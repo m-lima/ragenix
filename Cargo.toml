@@ -16,10 +16,10 @@ lto = true
 
 [build-dependencies]
 bindgen = "0.72.1"
-pkg-config = "0.3.32"
+pkg-config = "0.3.33"
 
 [dependencies]
-age = { version = "0.11.2", features = [
+age = { version = "0.11.3", features = [
   "armor",
   "cli-common",
   "plugin",

@@ -213,9 +213,7 @@ impl AttrBuilder {
 
         let result = unsafe { nix::nix_make_attrs(self.ctx, self.ret, self.builder) };
         if result != nix::nix_err::NIX_OK {
-            unsafe {
-                nix::nix_set_err_msg(self.ctx, result, c"failed to build attribute set".as_ptr());
-            }
+            bail!(self.ctx => result, "failed to build attribute set");
         }
 
         self.value = std::ptr::null_mut();

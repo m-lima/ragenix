@@ -32,16 +32,12 @@
         lockRandomSeed = true;
         systemLinker = true;
         binary = false;
+        allowFilesets = [ ./wrapper.h ];
         nativeBuildInputs = pkgs: [
           pkgs.pkg-config
           pkgs.rustPlatform.bindgenHook
         ];
-        buildInputs = pkgs: [
-          pkgs.nix
-        ];
-        formatters = {
-          clang-format.enable = true;
-        };
+        buildInputs = pkgs: [ pkgs.nix ];
       }).outputs
     )
     // {
